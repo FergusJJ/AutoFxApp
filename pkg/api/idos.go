@@ -13,21 +13,12 @@ type ApiClient struct {
 }
 
 type ApiMonitorMessage struct {
-	MessageType        string  `json:"messageType"`
-	ID                 string  `json:"id"`
-	Created            int     `json:"created"` //should convert to epochTS?
-	Symbol             string  `json:"symbol"`
-	Volume             float64 `json:"volume"`
-	Direction          string  `json:"direction"`
-	EntryPrice         float64 `json:"entryPrice"`
-	CurrentPrice       float64 `json:"currentPrice"`
-	Swap               float64 `json:"swap"`
-	Commissons         float64 `json:"commissions"`
-	ClosingCommissions float64 `json:"closingCommissions"`
-	Pips               float64 `json:"pips"`
-	GrossProfitEst     float64 `json:"grossProfitEst"`
-	NetProfitEst       float64 `json:"netProfitEst"`
-	Channel            string  `json:"channel"`
+	CopyPID     string  `json:"copyPID"`
+	SymbolID    int     `json:"symbolID"`
+	Price       float64 `json:"price"`
+	Volume      int     `json:"volume"`
+	Direction   string  `json:"direction"`
+	MessageType string  `json:"type"` //close or open
 }
 
 type apiErrorResponse struct {

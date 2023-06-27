@@ -27,10 +27,10 @@ type FxResponse struct {
 }
 
 type OrderData struct {
-	Symbol    string  `json:""`
-	Volume    float64 `json:""`
-	Direction string  `json:""` //"buy"/"sell"
-	OrderType string  `json:""` //"market"
+	Symbol    string  `json:"symbol"`
+	Volume    float64 `json:"volume"`
+	Direction string  `json:"direction"` //"buy"/"sell"
+	OrderType string  `json:"orderType"` //"market"
 }
 
 type CtraderSessionMessageType int

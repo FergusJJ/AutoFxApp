@@ -38,33 +38,33 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 	}
 	app.FxSession.LoggedIn = true
 
-	var fetchedSecurityList = false
-	for !fetchedSecurityList {
-		// log.Println(strings.Split(app.ApiSession.Cid, "_")[1])
-		err = app.FxSession.CtraderSecurityList(app.FxUser)
-		if err != nil {
-			switch err.ErrorCause {
-			case fix.ProgramError:
-				log.Println("program error")
-				return err
-			case fix.UserDataError:
-				log.Println("user data error")
-				return err
-			case fix.ConnectionError:
-				log.Printf("error sending message to FIX, retrying")
-				messageFails++
-				if messageFails > 3 {
-					return err
-				}
-				//should never happen
-			default:
-				log.Fatalf("%+v", err)
-			}
-		}
-		log.Println("got security list")
+	// var fetchedSecurityList = false
+	// for !fetchedSecurityList {
+	// 	// log.Println(strings.Split(app.ApiSession.Cid, "_")[1])
+	// 	err = app.FxSession.CtraderSecurityList(app.FxUser)
+	// 	if err != nil {
+	// 		switch err.ErrorCause {
+	// 		case fix.ProgramError:
+	// 			log.Println("program error")
+	// 			return err
+	// 		case fix.UserDataError:
+	// 			log.Println("user data error")
+	// 			return err
+	// 		case fix.ConnectionError:
+	// 			log.Printf("error sending message to FIX, retrying")
+	// 			messageFails++
+	// 			if messageFails > 3 {
+	// 				return err
+	// 			}
+	// 			//should never happen
+	// 		default:
+	// 			log.Fatalf("%+v", err)
+	// 		}
+	// 	}
+	// 	log.Println("got security list")
 
-		fetchedSecurityList = true
-	}
+	// 	fetchedSecurityList = true
+	// }
 	app.FxSession.GotSecurityList = true
 
 	//need to start function that will monitor here:
@@ -74,14 +74,17 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 		select {
 		case currentMessage := <-app.ApiSession.Client.CurrentMessage:
 			newMessage := &api.ApiMonitorMessage{}
+
 			err := json.Unmarshal(currentMessage, newMessage)
 			if err != nil {
 				log.Fatalf("%+v", err)
 			}
 			switch newMessage.MessageType {
-			case "New Position":
-				//execute new order
-				break
+			case "OPEN":
+				log.Printf("Got OPEN:%+v\n", newMessage)
+
+			case "CLOSE":
+				log.Printf("Got CLOSE:%+v\n", newMessage)
 			default:
 				log.Fatalln("uknown message type sent to the ", err)
 			}
@@ -92,7 +95,6 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 			continue
 		}
 	}
-	return nil
 
 }
 
