@@ -74,6 +74,20 @@ func (user *FxUser) constructNewOrderSingle(session *FxSession, orderData OrderD
 	return message, nil
 }
 
+func (user *FxUser) constructOrderMassStatusRequest(session *FxSession) (string, error) {
+	var orderMassStatusRequestBody string
+	var orderMassStatusRequestParams []string
+	orderMassStatusRequestParams = append(orderMassStatusRequestParams, formatMessageSlice(MassStatusReqID, uuid.New().String(), true))
+	orderMassStatusRequestParams = append(orderMassStatusRequestParams, formatMessageSlice(MassStatusReqType, "7", true))
+	orderMassStatusRequestBody = strings.Join(orderMassStatusRequestParams, "|")
+	orderMassStatusRequestBody = fmt.Sprintf("%s|", orderMassStatusRequestBody)
+	header := user.constructHeader(orderMassStatusRequestBody, OrderMassStatusRequest, session)
+	headerWithBody := fmt.Sprintf("%s%s", header, orderMassStatusRequestBody)
+	trailer := constructTrailer(headerWithBody)
+	message := strings.ReplaceAll(fmt.Sprintf("%s%s", headerWithBody, trailer), "|", "\u0001")
+	return message, nil
+}
+
 func (user *FxUser) constructHeader(bodyMessage string, messageType CtraderSessionMessageType, session *FxSession) string {
 	var messageTypeStr = fmt.Sprintf("%d", messageType)
 	var header string

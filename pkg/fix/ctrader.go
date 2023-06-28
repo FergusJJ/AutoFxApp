@@ -2,6 +2,7 @@ package fix
 
 import (
 	"fmt"
+	"log"
 )
 
 func (session *FxSession) CtraderLogin(user FxUser) *ErrorWithCause {
@@ -98,7 +99,7 @@ func (session *FxSession) CtraderNewOrderSingle(user FxUser, orderData OrderData
 	resp := session.sendMessage(orderMessage, user)
 	if resp.err != nil {
 		return &ErrorWithCause{
-			ErrorMessage: err.Error(),
+			ErrorMessage: resp.err.Error(),
 			ErrorCause:   ConnectionError,
 		}
 	}
@@ -118,10 +119,34 @@ func (session *FxSession) CtraderOrderStatus(user *FxUser) {
 
 }
 
-func (session *FxSession) CtraderMassStatus(user *FxUser) {
+func (session *FxSession) CtraderMassStatus(user FxUser) *ErrorWithCause {
+	orderMessage, err := user.constructOrderMassStatusRequest(session)
+	if err != nil {
+		return &ErrorWithCause{
+			ErrorMessage: err.Error(),
+			ErrorCause:   ProgramError,
+		}
 
+	}
+	resp := session.sendMessage(orderMessage, user)
+	if resp.err != nil {
+		return &ErrorWithCause{
+			ErrorMessage: resp.err.Error(),
+			ErrorCause:   ConnectionError,
+		}
+	}
+	err = parseFIXResponse(resp.body, NewOrderSingle)
+	if err != nil {
+		return &ErrorWithCause{
+			ErrorMessage: err.Error(),
+			ErrorCause:   UserDataError,
+		}
+	}
+	log.Println(string(resp.body))
+	session.MessageSequenceNumber++
+	return nil
 }
 
-func (session *FxSession) CtraderRequestForPositions(user *FxUser) {
+func (session *FxSession) CtraderRequestForPositions(user FxUser) {
 
 }

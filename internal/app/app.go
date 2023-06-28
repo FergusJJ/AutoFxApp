@@ -66,7 +66,6 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 	// 	fetchedSecurityList = true
 	// }
 	app.FxSession.GotSecurityList = true
-
 	//need to start function that will monitor here:
 	go app.ApiSession.ListenForMessages()
 	//need to start function that will display open positions here:
@@ -74,7 +73,6 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 		select {
 		case currentMessage := <-app.ApiSession.Client.CurrentMessage:
 			newMessage := &api.ApiMonitorMessage{}
-
 			err := json.Unmarshal(currentMessage, newMessage)
 			if err != nil {
 				log.Fatalf("%+v", err)
@@ -92,6 +90,13 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 			//need to check what the message is here, execute message
 		default:
 			//could maybe just poll current orders here?
+			//poll position
+			//check for updates, if none continue, else update the table
+			fxErr := app.FxSession.CtraderMassStatus(app.FxUser)
+			if fxErr != nil {
+				log.Panicf("%+v", fxErr)
+			}
+			log.Fatal()
 			continue
 		}
 	}
