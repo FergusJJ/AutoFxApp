@@ -110,6 +110,7 @@ func (session *FxSession) CtraderNewOrderSingle(user FxUser, orderData OrderData
 			ErrorCause:   UserDataError,
 		}
 	}
+	log.Println(string(resp.body))
 	session.MessageSequenceNumber++
 	return nil
 }
@@ -120,7 +121,35 @@ func (session *FxSession) CtraderOrderStatus(user *FxUser) {
 }
 
 func (session *FxSession) CtraderMassStatus(user FxUser) *ErrorWithCause {
-	orderMessage, err := user.constructOrderMassStatusRequest(session)
+	statusMessage, err := user.constructOrderMassStatusRequest(session)
+	if err != nil {
+		return &ErrorWithCause{
+			ErrorMessage: err.Error(),
+			ErrorCause:   ProgramError,
+		}
+
+	}
+	resp := session.sendMessage(statusMessage, user)
+	if resp.err != nil {
+		return &ErrorWithCause{
+			ErrorMessage: resp.err.Error(),
+			ErrorCause:   ConnectionError,
+		}
+	}
+	err = parseFIXResponse(resp.body, OrderMassStatusRequest)
+	if err != nil {
+		return &ErrorWithCause{
+			ErrorMessage: err.Error(),
+			ErrorCause:   UserDataError,
+		}
+	}
+	session.MessageSequenceNumber++
+	return nil
+}
+
+func (session *FxSession) CtraderRequestForPositions(user FxUser) *ErrorWithCause {
+
+	orderMessage, err := user.constructPositionsRequest(session) //constructOrderMassStatusRequest(session)
 	if err != nil {
 		return &ErrorWithCause{
 			ErrorMessage: err.Error(),
@@ -135,18 +164,14 @@ func (session *FxSession) CtraderMassStatus(user FxUser) *ErrorWithCause {
 			ErrorCause:   ConnectionError,
 		}
 	}
-	err = parseFIXResponse(resp.body, NewOrderSingle)
+	err = parseFIXResponse(resp.body, RequestForPositions)
 	if err != nil {
 		return &ErrorWithCause{
 			ErrorMessage: err.Error(),
 			ErrorCause:   UserDataError,
 		}
 	}
-	log.Println(string(resp.body))
+	parsePositionReport(string(resp.body))
 	session.MessageSequenceNumber++
 	return nil
-}
-
-func (session *FxSession) CtraderRequestForPositions(user FxUser) {
-
 }

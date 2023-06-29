@@ -3,6 +3,7 @@ package fix
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -88,6 +89,20 @@ func (user *FxUser) constructOrderMassStatusRequest(session *FxSession) (string,
 	return message, nil
 }
 
+func (user *FxUser) constructPositionsRequest(session *FxSession) (string, error) {
+	var constructPositionsRequestBody string
+	var constructPositionsRequestParams []string
+	constructPositionsRequestParams = append(constructPositionsRequestParams, formatMessageSlice(PosReqID, uuid.New().String(), true))
+	constructPositionsRequestBody = strings.Join(constructPositionsRequestParams, "|")
+	constructPositionsRequestBody = fmt.Sprintf("%s|", constructPositionsRequestBody)
+	header := user.constructHeader(constructPositionsRequestBody, RequestForPositions, session)
+	headerWithBody := fmt.Sprintf("%s%s", header, constructPositionsRequestBody)
+	trailer := constructTrailer(headerWithBody)
+	message := strings.ReplaceAll(fmt.Sprintf("%s%s", headerWithBody, trailer), "|", "\u0001")
+	log.Println(message)
+	return message, nil
+}
+
 func (user *FxUser) constructHeader(bodyMessage string, messageType CtraderSessionMessageType, session *FxSession) string {
 	var messageTypeStr = fmt.Sprintf("%d", messageType)
 	var header string
@@ -147,3 +162,10 @@ func formatMessageSlice(ids CtraderParamIds, value string, useValueAsValue bool)
 func GetUUID() string {
 	return uuid.New().String()
 }
+
+/*
+8=FIX.4.4|9=100|35=AN|49=live.theBroker.12345|56=CSERVER|34=99|52=20170117-10:09:54|50=any_string|57=TRADE|710=876316401|10=103|
+
+
+8=FIX.4.4|9=126|35=AF|49=demo.ctrader.3697899|56=CServer|57=TRADE|50=TRADE|34=2|52=20230628-23:02:11|710=b765cb35-28dd-4ccf-b11e-3c68253316a6|10=036|
+*/

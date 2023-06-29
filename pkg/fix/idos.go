@@ -33,7 +33,8 @@ type OrderData struct {
 	OrderType string  `json:"orderType"` //"market"
 }
 
-type ExecutionRe
+type ExecutionReport struct {
+}
 
 type CtraderSessionMessageType int
 type CtraderQualifier string

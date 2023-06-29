@@ -92,7 +92,8 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 			//could maybe just poll current orders here?
 			//poll position
 			//check for updates, if none continue, else update the table
-			fxErr := app.FxSession.CtraderMassStatus(app.FxUser)
+			fxErr := app.FxSession.CtraderRequestForPositions(app.FxUser)
+			// fxErr := app.FxSession.CtraderNewOrderSingle(app.FxUser, fix.OrderData{})
 			if fxErr != nil {
 				log.Panicf("%+v", fxErr)
 			}

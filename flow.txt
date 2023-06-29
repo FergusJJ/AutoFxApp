@@ -1,0 +1,20 @@
+#init connections to api/fix
+#login
+#fetch userPosID:copyPosID pairs from DB and save to in memory mapping
+
+REPEAT BELOW
+#wait for positions 
+    #poll current positions 
+    #update ui as changes occur
+#position change received
+#if close
+##execute the close position request for the corresponding userPos
+##remove pair from mapping
+#if open
+##send New Order Single
+##get back Order ID
+##send 
+##get executio report
+##if the order has been filled (39=2) then get Position ID (tag 721)
+##send userPosID:copyPosID pair to DB and update in mem mapping
+####else do something based on expiry
