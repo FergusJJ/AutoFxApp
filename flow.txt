@@ -18,3 +18,6 @@ REPEAT BELOW
 ##if the order has been filled (39=2) then get Position ID (tag 721)
 ##send userPosID:copyPosID pair to DB and update in mem mapping
 ####else do something based on expiry
+
+
+-Make title bar show what bot is currently doing as opposed to printing it out in the console

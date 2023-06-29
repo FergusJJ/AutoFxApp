@@ -12,16 +12,16 @@ import (
 func ParseFIXResponse(body []byte, messageType CtraderSessionMessageType) (interface{}, error) {
 
 	bodyString := strings.ReplaceAll(string(body), "\u0001", "|")
-	messageBodyAndTag := stripHeaderAndTrailer(bodyString)
-	log.Println(messageBodyAndTag)
-	if messageBodyAndTag.Tag == "5" {
 
+	messageBodyAndTag := stripHeaderAndTrailer(bodyString)
+	if messageBodyAndTag.Tag == "5" {
 		err := FixAPIError{ErrorMessage: ErrorInvalidLogon, ShouldRetry: false, AdditionalContext: messageBodyAndTag.MessageBody["58"]}
 		return nil, err
 	}
 
 	switch messageType {
 	case Logon, Logout:
+
 	case Heartbeat:
 
 	case TestRequest:
@@ -34,6 +34,7 @@ func ParseFIXResponse(body []byte, messageType CtraderSessionMessageType) (inter
 		switch messageBodyAndTag.Tag {
 		case "AP":
 			log.Println(messageBodyAndTag.MessageBody)
+			log.Println("requestForPositions")
 		default:
 			log.Fatalf("case %s not handled for RequestForPositions in ParseFIXResponse", messageBodyAndTag.Tag)
 		}
@@ -207,7 +208,7 @@ func parsePositionReport(positionReport string) {
 func stripHeaderAndTrailer(message string) *MessageBodyAndTag {
 	message = strings.Trim(message, "\u0002")
 	message = strings.Trim(message, "\u0001")
-
+	// message = strings.Trim(message, "\x00") //bunch of these
 	var strippedMessage = &MessageBodyAndTag{
 		Tag:         "",
 		MessageBody: map[string]string{},
@@ -219,25 +220,24 @@ func stripHeaderAndTrailer(message string) *MessageBodyAndTag {
 	//always has trailing "|" so last index will be ""
 
 	for _, tagAndVal := range tagSlice {
-		if tagAndVal == "" {
+		// if tagAndVal == ""{
+		// 	continue
+		// }
+		tagVal := strings.Split(tagAndVal, "=")
+		if len(tagVal) == 1 {
 			continue
 		}
-		tagVal := strings.Split(tagAndVal, "=")
-
 		switch tagVal[0] {
 		case "8", "9", "49", "56", "57", "50", "34", "52", "10":
 			continue
 		default:
 			if tagVal[0] == "35" {
 				strippedMessage.Tag = tagVal[1]
-				log.Println(strippedMessage)
 				continue
 			}
 			strippedMessage.MessageBody[tagVal[0]] = tagVal[1]
-			log.Println(strippedMessage)
 		}
 	}
-	log.Println(strippedMessage)
 	return strippedMessage
 
 }

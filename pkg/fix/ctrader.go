@@ -2,7 +2,6 @@ package fix
 
 import (
 	"fmt"
-	"log"
 )
 
 func (session *FxSession) CtraderLogin(user FxUser) *ErrorWithCause {
@@ -28,7 +27,6 @@ func (session *FxSession) CtraderLogin(user FxUser) *ErrorWithCause {
 			ErrorCause:   UserDataError,
 		}
 	}
-	log.Println("here")
 
 	session.MessageSequenceNumber++
 	return nil
@@ -159,7 +157,6 @@ func (session *FxSession) CtraderRequestForPositions(user FxUser) *ErrorWithCaus
 			ErrorCause:   ConnectionError,
 		}
 	}
-	log.Println(resp.body)
 	_, err = ParseFIXResponse(resp.body, RequestForPositions)
 	if err != nil {
 		return &ErrorWithCause{
