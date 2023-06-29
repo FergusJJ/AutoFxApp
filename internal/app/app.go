@@ -37,34 +37,6 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 		loginFinished = true
 	}
 	app.FxSession.LoggedIn = true
-
-	// var fetchedSecurityList = false
-	// for !fetchedSecurityList {
-	// 	// log.Println(strings.Split(app.ApiSession.Cid, "_")[1])
-	// 	err = app.FxSession.CtraderSecurityList(app.FxUser)
-	// 	if err != nil {
-	// 		switch err.ErrorCause {
-	// 		case fix.ProgramError:
-	// 			log.Println("program error")
-	// 			return err
-	// 		case fix.UserDataError:
-	// 			log.Println("user data error")
-	// 			return err
-	// 		case fix.ConnectionError:
-	// 			log.Printf("error sending message to FIX, retrying")
-	// 			messageFails++
-	// 			if messageFails > 3 {
-	// 				return err
-	// 			}
-	// 			//should never happen
-	// 		default:
-	// 			log.Fatalf("%+v", err)
-	// 		}
-	// 	}
-	// 	log.Println("got security list")
-
-	// 	fetchedSecurityList = true
-	// }
 	app.FxSession.GotSecurityList = true
 	//need to start function that will monitor here:
 	go app.ApiSession.ListenForMessages()

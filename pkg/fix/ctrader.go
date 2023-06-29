@@ -21,22 +21,19 @@ func (session *FxSession) CtraderLogin(user FxUser) *ErrorWithCause {
 			ErrorCause:   ConnectionError,
 		}
 	}
-	err = parseFIXResponse(resp.body, Logon)
+	_, err = ParseFIXResponse(resp.body, Logon)
 	if err != nil {
 		return &ErrorWithCause{
 			ErrorMessage: err.Error(),
 			ErrorCause:   UserDataError,
 		}
 	}
+	log.Println("here")
+
 	session.MessageSequenceNumber++
 	return nil
 }
 
-// func (session *FxSession) CtraderLogout(user *FxUser) {
-
-// }
-// XAGUSD=42
-// GBPUSD=2
 func (session *FxSession) CtraderSecurityList(user FxUser) *ErrorWithCause {
 	// securityRequestID :=  //"Sxo2Xlb1jzJB" //idk whether this has to be different between users?
 	securityMessage, err := user.constructSecurityList(session, "Sxo2Xlb1jzJC")
@@ -56,7 +53,7 @@ func (session *FxSession) CtraderSecurityList(user FxUser) *ErrorWithCause {
 		}
 	}
 
-	err = parseFIXResponse(resp.body, SecurityListRequest)
+	_, err = ParseFIXResponse(resp.body, SecurityListRequest)
 	if err != nil {
 		return &ErrorWithCause{
 			ErrorMessage: err.Error(),
@@ -95,7 +92,6 @@ func (session *FxSession) CtraderNewOrderSingle(user FxUser, orderData OrderData
 			ErrorCause:   ProgramError,
 		}
 	}
-	fmt.Println(orderMessage)
 	resp := session.sendMessage(orderMessage, user)
 	if resp.err != nil {
 		return &ErrorWithCause{
@@ -103,14 +99,13 @@ func (session *FxSession) CtraderNewOrderSingle(user FxUser, orderData OrderData
 			ErrorCause:   ConnectionError,
 		}
 	}
-	err = parseFIXResponse(resp.body, NewOrderSingle)
+	_, err = ParseFIXResponse(resp.body, NewOrderSingle)
 	if err != nil {
 		return &ErrorWithCause{
 			ErrorMessage: err.Error(),
 			ErrorCause:   UserDataError,
 		}
 	}
-	log.Println(string(resp.body))
 	session.MessageSequenceNumber++
 	return nil
 }
@@ -136,7 +131,7 @@ func (session *FxSession) CtraderMassStatus(user FxUser) *ErrorWithCause {
 			ErrorCause:   ConnectionError,
 		}
 	}
-	err = parseFIXResponse(resp.body, OrderMassStatusRequest)
+	_, err = ParseFIXResponse(resp.body, OrderMassStatusRequest)
 	if err != nil {
 		return &ErrorWithCause{
 			ErrorMessage: err.Error(),
@@ -164,14 +159,20 @@ func (session *FxSession) CtraderRequestForPositions(user FxUser) *ErrorWithCaus
 			ErrorCause:   ConnectionError,
 		}
 	}
-	err = parseFIXResponse(resp.body, RequestForPositions)
+	log.Println(resp.body)
+	_, err = ParseFIXResponse(resp.body, RequestForPositions)
 	if err != nil {
 		return &ErrorWithCause{
 			ErrorMessage: err.Error(),
 			ErrorCause:   UserDataError,
 		}
 	}
-	parsePositionReport(string(resp.body))
 	session.MessageSequenceNumber++
 	return nil
 }
+
+/*
+
+8=FIX.4.4|9=106|35=A|34=1|49=CSERVER|50=TRADE|52=20170117-08:03:04.509|56=live.theBroker.12345|57=any_string|98=0|108=30|141=Y|10=066|
+8=FIX.4.4|9=109|35=5|34=1|49=CSERVER|50=TRADE|52=20170117-08:03:04.509|56=live.theBroker.12345|58=InternalError: RET_INVALID_DATA|10=033|
+*/

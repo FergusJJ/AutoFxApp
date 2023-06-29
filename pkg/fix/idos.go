@@ -26,6 +26,11 @@ type FxResponse struct {
 	err  error
 }
 
+type MessageBodyAndTag struct {
+	Tag         string            `json:"tag"`
+	MessageBody map[string]string `json:"body"`
+}
+
 type OrderData struct {
 	Symbol    string  `json:"symbol"`
 	Volume    float64 `json:"volume"`
@@ -34,6 +39,103 @@ type OrderData struct {
 }
 
 type ExecutionReport struct {
+	OrderID         string `json:"OrderID"`
+	ClOrdID         string `json:"ClOrdID,omitempty"`
+	TotNumReports   string `json:"TotNumReports,omitempty"`
+	ExecType        string `json:"ExecType"`
+	OrdStatus       string `json:"OrdStatus"`
+	Symbol          string `json:"Symbol,omitempty"`
+	Side            string `json:"Side,omitempty"`
+	TransactTime    string `json:"TransactTime,omitempty"`
+	AvgPx           string `json:"AvgPx,omitempty"`
+	OrderQty        string `json:"OrderQty,omitempty"`
+	LeavesQty       string `json:"LeavesQty,omitempty"`
+	CumQty          string `json:"CumQty,omitempty"`
+	LastQty         string `json:"LastQty,omitempty"`
+	OrdType         string `json:"OrdType,omitempty"`
+	Price           string `json:"Price,omitempty"`
+	StopPx          string `json:"StopPx,omitempty"`
+	TimeInForce     string `json:"TimeInForce,omitempty"`
+	ExpireTime      string `json:"ExpireTime,omitempty"`
+	Text            string `json:"Text,omitempty"`
+	OrdRejReason    string `json:"OrdRejReason,omitempty"`
+	PosMaintRptID   string `json:"PosMaintRptID,omitempty"`
+	Designation     string `json:"Designation,omitempty"`
+	MassStatusReqID string `json:"MassStatusReqID,omitempty"`
+	AbsoluteTP      string `json:"AbsoluteTP,omitempty"`
+	RelativeTP      string `json:"RelativeTP,omitempty"`
+	AbsoluteSL      string `json:"AbsoluteSL,omitempty"`
+	RelativeSL      string `json:"RelativeSL,omitempty"`
+	TrailingSL      string `json:"TrailingSL,omitempty"`
+	TriggerMethodSL string `json:"TriggerMethodSL,omitempty"`
+	GuaranteedSL    string `json:"GuaranteedSL,omitempty"`
+}
+
+var executionReportTagMapping = map[string]string{
+	"37":   "OrderID",
+	"11":   "ClOrdID",
+	"911":  "TotNumReports",
+	"150":  "ExecType",
+	"39":   "OrdStatus",
+	"55":   "Symbol",
+	"54":   "Side",
+	"60":   "TransactTime",
+	"6":    "AvgPx",
+	"38":   "OrderQty",
+	"151":  "LeavesQty",
+	"14":   "CumQty",
+	"32":   "LastQty",
+	"40":   "OrdType",
+	"44":   "Price",
+	"99":   "StopPx",
+	"59":   "TimeInForce",
+	"126":  "ExpireTime",
+	"58":   "Text",
+	"103":  "OrdRejReason",
+	"721":  "PosMaintRptID",
+	"494":  "Designation",
+	"584":  "MassStatusReqID",
+	"1000": "AbsoluteTP",
+	"1001": "RelativeTP",
+	"1002": "AbsoluteSL",
+	"1003": "RelativeSL",
+	"1004": "TrailingSL",
+	"1005": "TriggerMethodSL",
+	"1006": "GuaranteedSL",
+}
+
+type OrderCancelReject struct {
+	OrderID          string `json:"OrderID"`
+	ClOrdID          string `json:"ClOrdID"`
+	OrigClOrdID      string `json:"OrigClOrdID"`
+	OrdStatus        string `json:"OrdStatus"`
+	CxlRejResponseTo string `json:"CxlRejResponseTo"`
+	Text             string `json:"Text"`
+}
+
+var orderCancelRejectTagMapping = map[string]string{
+	"37":  "OrderID",
+	"11":  "ClOrdID",
+	"41":  "OrigClOrdID",
+	"39":  "OrdStatus",
+	"434": "CxlRejResponseTo",
+	"58":  "Text",
+}
+
+type BusinessMessageReject struct {
+	RefSeqNum            int    `json:"RefSeqNum"`
+	RefMsgType           string `json:"RefMsgType"`
+	BusinessRejectRefID  string `json:"BusinessRejectRefID"`
+	BusinessRejectReason int    `json:"BusinessRejectReason"`
+	Text                 string `json:"Text"`
+}
+
+var businessMessageRejectTagMapping = map[string]string{
+	"45":  "RefSeqNum",
+	"372": "RefMsgType",
+	"379": "BusinessRejectRefID",
+	"380": "BusinessRejectReason",
+	"58":  "Text",
 }
 
 type CtraderSessionMessageType int
@@ -110,35 +212,35 @@ const (
 // MessageKeyValuePairs probably should be a map, names in map would give more context to values as well
 var MessageKeyValuePairs = map[CtraderParamIds]map[string]string{
 	//For Logon
-	EncryptionMethod:  map[string]string{"encryptionEnabled": "1", "encryptionDisabled": "0"},
-	HeartbeatInterval: map[string]string{"noHeartbeat": "0"},
-	ResetSequence:     map[string]string{"resetEnabled": "Y", "resetDisabled": "N"},
-	Username:          map[string]string{},
-	Password:          map[string]string{},
+	EncryptionMethod:  {"encryptionEnabled": "1", "encryptionDisabled": "0"},
+	HeartbeatInterval: {"noHeartbeat": "0"},
+	ResetSequence:     {"resetEnabled": "Y", "resetDisabled": "N"},
+	Username:          {},
+	Password:          {},
 
 	//New Order Single
-	ClOrdID:         map[string]string{}, //want to use uuid4 for this
-	NOSSymbol:       map[string]string{}, // determined at runtime
-	Side:            map[string]string{"buy": "1", "sell": "2"},
-	NOSTransactTime: map[string]string{}, //determined at runtime
-	NOSOrderQty:     map[string]string{}, //max precision is 0.01
-	NOSOrdType:      map[string]string{"market": "1", "limit": "2", "stop": "3"},
-	NOSPrice:        map[string]string{}, //Limit orders, may want to allow user to specify the slippage as a %
-	NOSStopPx:       map[string]string{}, //Stop orders,
-	NOSExpireTime:   map[string]string{}, //self explanatory, probably not going to use
-	NOSDesignation:  map[string]string{},
+	ClOrdID:         {}, //want to use uuid4 for this
+	NOSSymbol:       {}, // determined at runtime
+	Side:            {"buy": "1", "sell": "2"},
+	NOSTransactTime: {}, //determined at runtime
+	NOSOrderQty:     {}, //max precision is 0.01
+	NOSOrdType:      {"market": "1", "limit": "2", "stop": "3"},
+	NOSPrice:        {}, //Limit orders, may want to allow user to specify the slippage as a %
+	NOSStopPx:       {}, //Stop orders,
+	NOSExpireTime:   {}, //self explanatory, probably not going to use
+	NOSDesignation:  {},
 
 	//Standard Headers
-	HeaderBeginString:           map[string]string{"begin": "FIX.4.4"},
-	HeaderMessageLength:         map[string]string{},
-	HeaderMessageType:           map[string]string{"0": "A", "1": "5", "2": "0", "3": "1", "4": "2", "5": "3", "6": "4", "7": "H", "8": "AF", "9": "AN", "10": "D", "11": "x"},
-	HeaderSenderCompId:          map[string]string{},
-	HeaderTargetCompId:          map[string]string{"compId": "CSERVER"},
-	HeaderTargetSubId:           map[string]string{"trade": "TRADE", "quote": "QUOTE"},
-	HeaderSenderSubId:           map[string]string{"trade": "TRADE", "quote": "QUOTE"},
-	HeaderMessageSequenceNumber: map[string]string{},
-	HeaderMessageTimestamp:      map[string]string{},
+	HeaderBeginString:           {"begin": "FIX.4.4"},
+	HeaderMessageLength:         {},
+	HeaderMessageType:           {"0": "A", "1": "5", "2": "0", "3": "1", "4": "2", "5": "3", "6": "4", "7": "H", "8": "AF", "9": "AN", "10": "D", "11": "x"},
+	HeaderSenderCompId:          {},
+	HeaderTargetCompId:          {"compId": "CSERVER"},
+	HeaderTargetSubId:           {"trade": "TRADE", "quote": "QUOTE"},
+	HeaderSenderSubId:           {"trade": "TRADE", "quote": "QUOTE"},
+	HeaderMessageSequenceNumber: {},
+	HeaderMessageTimestamp:      {},
 
 	//Trailer
-	TrailerChecksum: map[string]string{},
+	TrailerChecksum: {},
 }

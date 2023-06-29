@@ -1,6 +1,7 @@
 package fix
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 
@@ -8,50 +9,104 @@ import (
 )
 
 // this should really return an interface as well
-func parseFIXResponse(body []byte, messageType CtraderSessionMessageType) error {
-	badRequest, reason := checkForBadRequest(string(body))
-	if !badRequest {
-		log.Println("req is good")
-		return nil
-	} else {
-		log.Println("req bad")
+func ParseFIXResponse(body []byte, messageType CtraderSessionMessageType) (interface{}, error) {
 
+	bodyString := strings.ReplaceAll(string(body), "\u0001", "|")
+	messageBodyAndTag := stripHeaderAndTrailer(bodyString)
+	log.Println(messageBodyAndTag)
+	if messageBodyAndTag.Tag == "5" {
+
+		err := FixAPIError{ErrorMessage: ErrorInvalidLogon, ShouldRetry: false, AdditionalContext: messageBodyAndTag.MessageBody["58"]}
+		return nil, err
 	}
+
 	switch messageType {
-	case Logon:
-		err := FixAPIError{ErrorMessage: ErrorInvalidLogon, ShouldRetry: false, AdditionalContext: reason}
-		// err = FixError{FixAPIError: {ErrorMessage: ErrorInvalidLogon, ShouldRetry: false, AdditionalContext: reason}}
-		return err
-	case Logout:
-		err := FixAPIError{ErrorMessage: ErrorInvalidLogout, ShouldRetry: false, AdditionalContext: reason}
-		return err
+	case Logon, Logout:
 	case Heartbeat:
-		err := FixAPIError{ErrorMessage: ErrorInvalidHeartbeat, ShouldRetry: false, AdditionalContext: reason}
-		return err
+
 	case TestRequest:
-		err := FixAPIError{ErrorMessage: ErrorInvalidTestRequest, ShouldRetry: false, AdditionalContext: reason}
-		return err
+
 	case Resend:
-		err := FixAPIError{ErrorMessage: ErrorInvalidResend, ShouldRetry: false, AdditionalContext: reason}
-		return err
+
 	case SequenceReset:
-		err := FixAPIError{ErrorMessage: ErrorInvalidSequenceReset, ShouldRetry: false, AdditionalContext: reason}
-		return err
+
+	case RequestForPositions:
+		switch messageBodyAndTag.Tag {
+		case "AP":
+			log.Println(messageBodyAndTag.MessageBody)
+		default:
+			log.Fatalf("case %s not handled for RequestForPositions in ParseFIXResponse", messageBodyAndTag.Tag)
+		}
+
 	case NewOrderSingle:
-		err := FixAPIError{ErrorMessage: ErrorInvalidNOSRequest, ShouldRetry: false, AdditionalContext: reason}
+		switch messageBodyAndTag.Tag {
+		case "8":
+			var executionReportMapping = map[string]string{}
+			var executionReport ExecutionReport
+			//execution report, order has gone through
+			for tag, val := range messageBodyAndTag.MessageBody {
+				executionReportMapping[executionReportTagMapping[tag]] = val
+			}
+			jsonData, err := json.Marshal(executionReportMapping)
+			if err != nil {
+				log.Fatal(err)
+			}
+			err = json.Unmarshal(jsonData, &executionReport)
+			if err != nil {
+				log.Fatal(err)
+			}
+			return executionReport, nil
+		case "9":
+			var orderCancelRejectMapping = map[string]string{}
+			var orderCancelReject OrderCancelReject
+			for tag, val := range messageBodyAndTag.MessageBody {
+				orderCancelRejectMapping[orderCancelRejectTagMapping[tag]] = val
+			}
+			jsonData, err := json.Marshal(orderCancelRejectMapping)
+			if err != nil {
+				log.Fatal(err)
+			}
+			err = json.Unmarshal(jsonData, &orderCancelReject)
+			if err != nil {
+				log.Fatal(err)
+			}
+			return orderCancelReject, nil
 
-		return err
+		case "j":
+			//BusinessMessageReject, Indicates issues with the FIX message.
+			var businessMessageRejectMapping = map[string]string{}
+			var businessMessageReject BusinessMessageReject
+			for tag, val := range messageBodyAndTag.MessageBody {
+				businessMessageRejectMapping[businessMessageRejectTagMapping[tag]] = val
+			}
+			jsonData, err := json.Marshal(businessMessageRejectMapping)
+			if err != nil {
+				log.Fatal(err)
+			}
+			err = json.Unmarshal(jsonData, &businessMessageReject)
+			if err != nil {
+				log.Fatal(err)
+			}
+			return businessMessageReject, nil
+		default:
+			log.Fatalf("case %s not handled for NewOrderSingle in ParseFIXResponse", messageBodyAndTag.Tag)
+		}
 	case SecurityListRequest:
-		err := FixAPIError{ErrorMessage: ErrorInvalidLogout, ShouldRetry: false, AdditionalContext: reason}
-		return err
-	case OrderStatusRequest:
-		err := FixAPIError{ErrorMessage: ErrorInvalidOrderStatus, ShouldRetry: false, AdditionalContext: reason}
-		return err
 
+	case OrderStatusRequest:
+		switch messageBodyAndTag.Tag {
+		case "8":
+		default:
+
+		}
+	//for when no response data is needed
 	default:
-		log.Fatal("programming error: sessionMessageCode fallthrough")
-		return nil
+		log.Println("got good response:")
+		log.Println(messageBodyAndTag.MessageBody)
+
+		return nil, nil
 	}
+	return nil, nil
 }
 
 func checkForBadRequest(responseBody string) (badRequest bool, reason string) {
@@ -145,6 +200,45 @@ func parsePositionReport(positionReport string) {
 		log.Printf("tag: %s, val: %s", tagValPair[0], tagValPair[1])
 
 	}
+
+}
+
+// want to return {messageType; body}
+func stripHeaderAndTrailer(message string) *MessageBodyAndTag {
+	message = strings.Trim(message, "\u0002")
+	message = strings.Trim(message, "\u0001")
+
+	var strippedMessage = &MessageBodyAndTag{
+		Tag:         "",
+		MessageBody: map[string]string{},
+	}
+	tagSlice := strings.Split(message, "|")
+	if len(tagSlice) == 1 {
+		return nil
+	}
+	//always has trailing "|" so last index will be ""
+
+	for _, tagAndVal := range tagSlice {
+		if tagAndVal == "" {
+			continue
+		}
+		tagVal := strings.Split(tagAndVal, "=")
+
+		switch tagVal[0] {
+		case "8", "9", "49", "56", "57", "50", "34", "52", "10":
+			continue
+		default:
+			if tagVal[0] == "35" {
+				strippedMessage.Tag = tagVal[1]
+				log.Println(strippedMessage)
+				continue
+			}
+			strippedMessage.MessageBody[tagVal[0]] = tagVal[1]
+			log.Println(strippedMessage)
+		}
+	}
+	log.Println(strippedMessage)
+	return strippedMessage
 
 }
 
