@@ -123,10 +123,10 @@ var orderCancelRejectTagMapping = map[string]string{
 }
 
 type BusinessMessageReject struct {
-	RefSeqNum            int    `json:"RefSeqNum"`
+	RefSeqNum            string `json:"RefSeqNum"`
 	RefMsgType           string `json:"RefMsgType"`
 	BusinessRejectRefID  string `json:"BusinessRejectRefID"`
-	BusinessRejectReason int    `json:"BusinessRejectReason"`
+	BusinessRejectReason string `json:"BusinessRejectReason"`
 	Text                 string `json:"Text"`
 }
 
@@ -136,6 +136,40 @@ var businessMessageRejectTagMapping = map[string]string{
 	"379": "BusinessRejectRefID",
 	"380": "BusinessRejectReason",
 	"58":  "Text",
+}
+
+type PositionReport struct {
+	PosReqID           string `json:"PosReqID"`
+	PosMaintRptID      string `json:"PosMaintRptID,omitempty"`
+	TotalNumPosReports string `json:"TotalNumPosReports"`
+	PosReqResult       string `json:"PosReqResult"`
+	Symbol             string `json:"Symbol,omitempty"`
+	NoPositions        string `json:"NoPositions,omitempty"`
+	LongQty            string `json:"LongQty,omitempty"`
+	ShortQty           string `json:"ShortQty,omitempty"`
+	SettlPrice         string `json:"SettlPrice,omitempty"`
+	AbsoluteTP         string `json:"AbsoluteTP,omitempty"`
+	AbsoluteSL         string `json:"AbsoluteSL,omitempty"`
+	TrailingSL         string `json:"TrailingSL,omitempty"`
+	TriggerMethodSL    string `json:"TriggerMethodSL,omitempty"`
+	GuaranteedSL       string `json:"GuaranteedSL,omitempty"`
+}
+
+var positionReportTagMapping = map[string]string{
+	"710":  "PosReqID",
+	"721":  "PosMaintRptID",
+	"727":  "TotalNumPosReports",
+	"728":  "PosReqResult",
+	"55":   "Symbol",
+	"702":  "NoPositions",
+	"704":  "LongQty",
+	"705":  "ShortQty",
+	"730":  "SettlPrice",
+	"1000": "AbsoluteTP",
+	"1002": "AbsoluteSL",
+	"1004": "TrailingSL",
+	"1005": "TriggerMethodSL",
+	"1006": "GuaranteedSL",
 }
 
 type CtraderSessionMessageType int

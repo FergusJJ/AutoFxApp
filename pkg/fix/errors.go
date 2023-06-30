@@ -6,6 +6,7 @@ const (
 	ConnectionError ErrorType = iota
 	UserDataError
 	ProgramError
+	MarketError
 )
 
 type ErrorWithCause struct {

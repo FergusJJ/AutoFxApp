@@ -15,6 +15,11 @@ import (
 	"github.com/apex/log/handlers/cli"
 )
 
+/*
+When getting position report, fix sends multiple messages, these  don't always come in at once, so aren't read into []byte on one request so for 4
+positions may get 3 the first time then 1 the second time, this will mean that all 4 are fetched eventually but may want to make sure that server
+has completely finished sending the messages first
+*/
 func main() {
 	var exitCode int
 	defer func() {

@@ -2,6 +2,7 @@ package fix
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -9,16 +10,13 @@ import (
 )
 
 // this should really return an interface as well
-func ParseFIXResponse(body []byte, messageType CtraderSessionMessageType) (interface{}, error) {
+func ParseFIXResponse(body []string, messageType CtraderSessionMessageType) (string, interface{}, error) {
 
-	bodyString := strings.ReplaceAll(string(body), "\u0001", "|")
-
-	messageBodyAndTag := stripHeaderAndTrailer(bodyString)
+	messageBodyAndTag := stripHeaderAndTrailer(body)
 	if messageBodyAndTag.Tag == "5" {
 		err := FixAPIError{ErrorMessage: ErrorInvalidLogon, ShouldRetry: false, AdditionalContext: messageBodyAndTag.MessageBody["58"]}
-		return nil, err
+		return "", nil, err
 	}
-
 	switch messageType {
 	case Logon, Logout:
 
@@ -33,8 +31,21 @@ func ParseFIXResponse(body []byte, messageType CtraderSessionMessageType) (inter
 	case RequestForPositions:
 		switch messageBodyAndTag.Tag {
 		case "AP":
-			log.Println(messageBodyAndTag.MessageBody)
-			log.Println("requestForPositions")
+			var positionReportMapping = map[string]string{}
+			var positionReport PositionReport
+			for tag, val := range messageBodyAndTag.MessageBody {
+				positionReportMapping[positionReportTagMapping[tag]] = val
+			}
+			jsonData, err := json.Marshal(positionReportMapping)
+			if err != nil {
+				log.Fatal(err)
+			}
+			err = json.Unmarshal(jsonData, &positionReport)
+			if err != nil {
+				log.Fatal(err)
+			}
+			log.Println(positionReport)
+			return "AP", positionReport, nil
 		default:
 			log.Fatalf("case %s not handled for RequestForPositions in ParseFIXResponse", messageBodyAndTag.Tag)
 		}
@@ -56,7 +67,7 @@ func ParseFIXResponse(body []byte, messageType CtraderSessionMessageType) (inter
 			if err != nil {
 				log.Fatal(err)
 			}
-			return executionReport, nil
+			return "8", executionReport, nil
 		case "9":
 			var orderCancelRejectMapping = map[string]string{}
 			var orderCancelReject OrderCancelReject
@@ -71,7 +82,7 @@ func ParseFIXResponse(body []byte, messageType CtraderSessionMessageType) (inter
 			if err != nil {
 				log.Fatal(err)
 			}
-			return orderCancelReject, nil
+			return "9", orderCancelReject, nil
 
 		case "j":
 			//BusinessMessageReject, Indicates issues with the FIX message.
@@ -88,7 +99,7 @@ func ParseFIXResponse(body []byte, messageType CtraderSessionMessageType) (inter
 			if err != nil {
 				log.Fatal(err)
 			}
-			return businessMessageReject, nil
+			return "j", businessMessageReject, nil
 		default:
 			log.Fatalf("case %s not handled for NewOrderSingle in ParseFIXResponse", messageBodyAndTag.Tag)
 		}
@@ -105,9 +116,9 @@ func ParseFIXResponse(body []byte, messageType CtraderSessionMessageType) (inter
 		log.Println("got good response:")
 		log.Println(messageBodyAndTag.MessageBody)
 
-		return nil, nil
+		return "", nil, nil
 	}
-	return nil, nil
+	return "", nil, nil
 }
 
 func checkForBadRequest(responseBody string) (badRequest bool, reason string) {
@@ -139,8 +150,6 @@ func checkForBadRequest(responseBody string) (badRequest bool, reason string) {
 func parseSecurityList(securityBlob string) (map[string]string, error) {
 
 	//removing padding
-	securityBlob = strings.Trim(securityBlob, "\u0002")
-	securityBlob = strings.Trim(securityBlob, "\u0001")
 
 	securityBlob = strings.ReplaceAll(securityBlob, "\u0001", "|")
 	splitAtTagSep := strings.Split(securityBlob, "|")
@@ -179,50 +188,42 @@ func parseSecurityList(securityBlob string) (map[string]string, error) {
 	return secList, nil
 }
 
-func parsePositionReport(positionReport string) {
-	positionReport = strings.Trim(positionReport, "\u0002")
-	positionReport = strings.Trim(positionReport, "\u0001")
-	positionReport = strings.ReplaceAll(positionReport, "\u0001", "|")
-
-	log.Println(positionReport)
-
-	splitAtTagSep := strings.Split(positionReport, "|")
-	// tagValMap := make(map[int]string)
-	//should never happen
-	if len(splitAtTagSep) == 0 {
-		log.Fatal("programming error at: len(splitAtTagSep) == 0")
-	}
-	for i := range splitAtTagSep {
-		tagValPair := strings.Split(splitAtTagSep[i], "=")
-		if len(tagValPair) == 0 {
+func preparseBody(positionReport []byte) [][]string {
+	positionReportString := string(positionReport)
+	positionReportString = strings.ReplaceAll(positionReportString, "\u0001", "|")
+	//now need to split into individual messages
+	tmpSlice := []string{}
+	individualMessages := [][]string{}
+	splitByTagPair := strings.Split(positionReportString, "|")
+	for _, tagAndVal := range splitByTagPair {
+		tagValSlice := strings.Split(tagAndVal, "=")
+		if len(tagValSlice) == 1 {
 			continue
 		}
-		//tag 728 contains amount of positions
-		log.Printf("tag: %s, val: %s", tagValPair[0], tagValPair[1])
+		tmpSlice = append(tmpSlice, tagAndVal)
+		if tagValSlice[0] == "10" {
+			fmt.Println(tmpSlice)
+			individualMessages = append(individualMessages, tmpSlice)
+			tmpSlice = []string{}
+		}
 
 	}
+
+	return individualMessages
 
 }
 
 // want to return {messageType; body}
-func stripHeaderAndTrailer(message string) *MessageBodyAndTag {
-	message = strings.Trim(message, "\u0002")
-	message = strings.Trim(message, "\u0001")
+func stripHeaderAndTrailer(message []string) *MessageBodyAndTag {
+
 	// message = strings.Trim(message, "\x00") //bunch of these
 	var strippedMessage = &MessageBodyAndTag{
 		Tag:         "",
 		MessageBody: map[string]string{},
 	}
-	tagSlice := strings.Split(message, "|")
-	if len(tagSlice) == 1 {
-		return nil
-	}
 	//always has trailing "|" so last index will be ""
 
-	for _, tagAndVal := range tagSlice {
-		// if tagAndVal == ""{
-		// 	continue
-		// }
+	for _, tagAndVal := range message {
 		tagVal := strings.Split(tagAndVal, "=")
 		if len(tagVal) == 1 {
 			continue

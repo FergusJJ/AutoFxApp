@@ -5,6 +5,7 @@ import (
 	"log"
 	"pollo/pkg/api"
 	"pollo/pkg/fix"
+	"time"
 
 	"github.com/fasthttp/websocket"
 )
@@ -52,9 +53,22 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 			switch newMessage.MessageType {
 			case "OPEN":
 				log.Printf("Got OPEN:%+v\n", newMessage)
-
+				pid, err := app.OpenPosition(newMessage)
+				if err != nil {
+					log.Println("open position error:", err)
+					continue
+				}
+				//send pid to db with the copy pid
+				log.Println("sending pid:", pid)
 			case "CLOSE":
 				log.Printf("Got CLOSE:%+v\n", newMessage)
+				pid, err := app.ClosePosition(newMessage)
+				if err != nil {
+					log.Println("open position error:", err)
+					continue
+				}
+				//send pid to db with the copy pid
+				log.Println("sending pid:", pid)
 			default:
 				log.Fatalln("uknown message type sent to the ", err)
 			}
@@ -64,16 +78,15 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 			//could maybe just poll current orders here?
 			//poll position
 			//check for updates, if none continue, else update the table
-			fxErr := app.FxSession.CtraderRequestForPositions(app.FxUser)
-			// fxErr := app.FxSession.CtraderNewOrderSingle(app.FxUser, fix.OrderData{})
-			if fxErr != nil {
-				log.Panicf("%+v", fxErr)
-			}
-			log.Fatal()
+			// fxErr := app.FxSession.CtraderRequestForPositions(app.FxUser)
+			// if fxErr != nil {
+			// 	log.Panicf("%+v", fxErr)
+			// }
+			time.Sleep(2 * time.Second)
 			continue
 		}
 	}
-
+	return nil
 }
 
 func (app *FxApp) CloseExistingConnections() {

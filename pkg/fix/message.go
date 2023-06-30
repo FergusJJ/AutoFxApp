@@ -3,7 +3,6 @@ package fix
 import (
 	"errors"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -36,7 +35,7 @@ func (user *FxUser) constructLogin(session *FxSession) (string, error) {
 
 	loginParams = append(loginParams, formatMessageSlice(EncryptionMethod, "encryptionDisabled", false))
 
-	loginParams = append(loginParams, formatMessageSlice(HeartbeatInterval, "30", true))
+	loginParams = append(loginParams, formatMessageSlice(HeartbeatInterval, "0", true))
 
 	loginParams = append(loginParams, formatMessageSlice(ResetSequence, "resetDisabled", false))
 
@@ -58,7 +57,6 @@ func (user *FxUser) constructNewOrderSingle(session *FxSession, orderData OrderD
 	orderData.OrderType = "market"
 
 	volAsString := fmt.Sprintf("%g", orderData.Volume)
-	fmt.Println("volume:", volAsString)
 	transactTime := time.Now().UTC().Format(YYYYMMDDhhmmss)
 	newOrderSingleParams = append(newOrderSingleParams, formatMessageSlice(ClOrdID, uuid.New().String(), true))
 	newOrderSingleParams = append(newOrderSingleParams, formatMessageSlice(NOSSymbol, orderData.Symbol, true))
@@ -99,7 +97,6 @@ func (user *FxUser) constructPositionsRequest(session *FxSession) (string, error
 	headerWithBody := fmt.Sprintf("%s%s", header, constructPositionsRequestBody)
 	trailer := constructTrailer(headerWithBody)
 	message := strings.ReplaceAll(fmt.Sprintf("%s%s", headerWithBody, trailer), "|", "\u0001")
-	log.Println(message)
 	return message, nil
 }
 
