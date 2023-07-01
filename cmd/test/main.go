@@ -1,7 +1,13 @@
 package main
 
 import (
-	"pollo/internal/app/display"
+	"log"
+	"math"
+	"math/rand"
+	"time"
+
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 /*
@@ -14,18 +20,66 @@ import (
 		MessageType string  `json:"type"` //close or open
 	}
 */
+
+var messages = []string{
+	"this is message 1",
+	"this is message 2",
+	"this is message 3",
+	"this is message 4",
+	"this is message 5",
+	"this is message 6",
+	"this is message 7",
+}
+
+type displayData struct {
+	DID         int
+	DataMessage string
+	Green       bool
+}
+
+var app = tview.NewApplication()
+var text = tview.NewTextView().
+	SetTextColor(tcell.ColorGreen).
+	SetText("(q) to quit")
+
 func main() {
-	var testData = [][]interface{}{
-		{1, "Newton G. Goetz", "252-585-5166", "NewtonGGoetz@dayrep.com", 10},
-		{2, "Rebecca R. Edney", "865-475-4171", "RebeccaREdney@armyspy.com", 12},
-		{3, "John R. Jackson", "810-325-1417", "JohnRJackson@armyspy.com", 15},
-		{4, "Ron J. Gomes", "217-450-8568", "RonJGomes@rhyta.com", 25},
-		{5, "Penny R. Lewis", "870-794-1666", "PennyRLewis@rhyta.com", 5},
-		{6, "Sofia J. Smith", "770-333-7379", "SofiaJSmith@armyspy.com", 3},
-		{7, "Karlene D. Owen", "231-242-4157", "KarleneDOwen@jourrapide.com", 12},
-		{8, "Daniel L. Love", "978-210-4178", "DanielLLove@rhyta.com", 44},
-		{9, "Julie T. Dial", "719-966-5354", "JulieTDial@jourrapide.com", 8},
-		{10, "Juan J. Kennedy", "908-910-8893", "JuanJKennedy@dayrep.com", 16},
+	//start standard program init stuff
+	log.Println("loading stuff..")
+	time.Sleep(3 * time.Second)
+	//end of normal init stuff
+
+	if err := app.SetRoot(text, true).EnableMouse(true).Run(); err != nil {
+		log.Fatal(err)
 	}
-	display.DrawTable(testData)
+
+	//other stuff happening here..
+	//call goroutines
+	ticker := time.NewTicker(10 * time.Second)
+	for {
+
+		select {
+		case <-ticker.C:
+			//once first bit of data is fetched, load table
+			_ = feedData()
+			//update ui here
+
+		}
+	}
+
+}
+
+func feedData() []displayData {
+	m1 := rand.Intn(7)
+	m2 := rand.Intn(7)
+	d1 := displayData{
+		DID:         rand.Int(),
+		DataMessage: messages[m1],
+		Green:       (int(math.Round(rand.Float64()))) == 1,
+	}
+	d2 := displayData{
+		DID:         rand.Int(),
+		DataMessage: messages[m2],
+		Green:       (int(math.Round(rand.Float64()))) == 0,
+	}
+	return []displayData{d1, d2}
 }
