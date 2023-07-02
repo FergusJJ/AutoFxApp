@@ -1,20 +1,43 @@
 package ui
 
-import "github.com/rivo/tview"
+import (
+	"strings"
+
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
+)
 
 type Feed struct {
-	FeedView *tview.Flex
+	Box       *tview.TextView
+	maxLines  int
+	messages  []string
+	lineCount int
 }
 
-func newFeed() *Feed {
-	testBox := tview.NewFlex()
+func NewFeed(maxLines int) *Feed {
+	box := tview.NewTextView()
+	box.SetBorder(true).SetTitle("Feed")
+	box.SetBorderPadding(0, 0, 1, 1) // Remove vertical padding
 
-	return &Feed{FeedView: testBox}
+	return &Feed{
+		Box:       box,
+		maxLines:  maxLines,
+		messages:  make([]string, 0),
+		lineCount: 0,
+	}
 }
 
-func (feed *Feed) pushToFeed() {
-	// feed.FeedView = feed.FeedView.AddItem("List item 1", "Some explanatory text", 'a', nil).
-	// 	AddItem("List item 2", "Some explanatory text", 'b', nil).
-	// 	AddItem("List item 3", "Some explanatory text", 'c', nil).
-	// 	AddItem("List item 4", "Some explanatory text", 'd', nil)
+func (f *Feed) Log(message string, color ...tcell.Color) {
+	if len(color) == 0 {
+		//color should just be grey
+	}
+	f.messages = append(f.messages, message)
+	f.lineCount++
+
+	if f.lineCount > f.maxLines {
+		f.lineCount--
+		f.messages = f.messages[1:]
+	}
+
+	f.Box.SetText(strings.Join(f.messages, "\n"))
 }

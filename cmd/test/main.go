@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-	"strings"
+	"pollo/internal/app/ui"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -38,57 +38,24 @@ type displayData struct {
 	Green       bool
 }
 
-// func main() {
-// 	//start standard program init stuff
-// 	// log.Println("loading stuff..")
-// 	// time.Sleep(3 * time.Second)
-// 	//end of normal init stuff
-
-// 	ui.InitUi("Fergus")
-
-// 	//other stuff happening here..
-// 	//call goroutines
-// 	ticker := time.NewTicker(10 * time.Second)
-// 	for {
-
-// 		select {
-// 		case <-ticker.C:
-// 			//once first bit of data is fetched, load table
-// 			_ = feedData()
-// 			//update ui here
-
-// 		}
-// 	}
-
-// }
-
 func main() {
 	app := tview.NewApplication()
-	box := tview.NewTextView()
-	box.SetBorder(false).SetTitle("Feed")
-	box.SetBorderPadding(0, 0, 1, 1) // Remove vertical padding
 
-	go func() {
-		messages := []string{}
-
-		// Simulating messages being added to the feed
-		for i := 1; i <= 1000; i++ {
-			message := fmt.Sprintf("Message %d - %s\n", i, time.Now().Format("2006-01-02 15:04:05"))
-			app.QueueUpdateDraw(func() {
-				_, _, _, height := box.GetRect()
-				messages = append(messages, message)
-				if len(messages) >= height-1 {
-					messages = messages[1:] // Remove the top message if there is no space
-				}
-				box.SetText(strings.Join(messages, ""))
-			})
-			time.Sleep(time.Microsecond * 500)
-		}
-	}()
+	feed := ui.NewFeed(5)
 
 	flex := tview.NewFlex().SetDirection(tview.FlexRow)
-	flex.AddItem(tview.NewBox(), 0, 4, false)
-	flex.AddItem(box, 0, 1, false)
+	flex.AddItem(feed.Box, 0, 1, false)
+
+	go func() {
+		// Simulating messages being added to the feed
+		for i := 1; i <= 10; i++ {
+			message := fmt.Sprintf("Message %d - %s", i, time.Now().Format("2006-01-02 15:04:05"))
+			app.QueueUpdateDraw(func() {
+				feed.Log(message)
+			})
+			time.Sleep(time.Second)
+		}
+	}()
 
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		// Close the application when pressing "ESC"
