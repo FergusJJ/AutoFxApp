@@ -1,9 +1,9 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 
-	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
@@ -14,9 +14,11 @@ type Feed struct {
 	lineCount int
 }
 
-func NewFeed(maxLines int) *Feed {
+func NewFeed(title string, maxLines int) *Feed {
 	box := tview.NewTextView()
-	box.SetBorder(true).SetTitle("Feed")
+	box.SetDynamicColors(true)
+	box.SetBorder(true)
+	box.SetTitle(title)
 	box.SetBorderPadding(0, 0, 1, 1) // Remove vertical padding
 
 	return &Feed{
@@ -27,13 +29,14 @@ func NewFeed(maxLines int) *Feed {
 	}
 }
 
-func (f *Feed) Log(message string, color ...tcell.Color) {
-	if len(color) == 0 {
-		//color should just be grey
-	}
-	f.messages = append(f.messages, message)
+func (f *Feed) Log(message string, color string) {
+	coloredMessage := fmt.Sprintf("[%s]%s[white]", color, message)
+	f.messages = append(f.messages, coloredMessage)
 	f.lineCount++
-
+	if f.maxLines == -1 {
+		f.Box.SetText(strings.Join(f.messages, "\n"))
+		return
+	}
 	if f.lineCount > f.maxLines {
 		f.lineCount--
 		f.messages = f.messages[1:]

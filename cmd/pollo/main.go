@@ -6,13 +6,10 @@ import (
 	"os"
 	"pollo/config"
 	"pollo/internal/app"
+	"pollo/internal/app/ui"
 	"pollo/pkg/api"
 	"pollo/pkg/fix"
 	"pollo/pkg/shutdown"
-
-	apexLog "github.com/apex/log"
-
-	"github.com/apex/log/handlers/cli"
 )
 
 /*
@@ -52,6 +49,7 @@ func start() (func(), error) {
 	if appErr != nil {
 		log.Printf("%v: %s\n", appErr.ErrorCause, appErr.ErrorMessage)
 		return func() {
+			//close app in cleanup
 			log.Println("running cleanup...")
 			cleanup()
 		}, nil
@@ -65,13 +63,7 @@ func start() (func(), error) {
 func initialiseProgram() (*app.FxApp, func(), error) {
 	app := &app.FxApp{}
 
-	//AppLogger Start
-	logger := &apexLog.Logger{
-		Handler: cli.New(os.Stdout),
-		Level:   1,
-	}
-	app.AppLogger = logger
-	//AppLogger Done
+	app.UI = ui.NewUi()
 
 	//FxUser & Lisence Key Start
 	fxUser, err := config.LoadDataFromJson()
