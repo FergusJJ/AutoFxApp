@@ -45,15 +45,19 @@ func start() (func(), error) {
 		Run app, all the app specific variables should be kept within this struct
 		May want to add an "isLoggedIn" field to app, in case it is necessary to always logout of FIX
 	*/
-	appErr := app.MainLoop()
-	if appErr != nil {
-		log.Printf("%v: %s\n", appErr.ErrorCause, appErr.ErrorMessage)
-		return func() {
-			//close app in cleanup
-			log.Println("running cleanup...")
-			cleanup()
-		}, nil
+	go app.MainLoop()
+	if err := app.UI.App.Run(); err != nil {
+		log.Println("ui error:", err)
 	}
+	// appErr := app.MainLoop()
+	// if appErr != nil {
+	// 	log.Printf("%v: %s\n", appErr.ErrorCause, appErr.ErrorMessage)
+	// 	return func() {
+	// 		//close app in cleanup
+	// 		log.Println("running cleanup...")
+	// 		cleanup()
+	// 	}, nil
+	// }
 	return func() {
 		log.Println("running cleanup...")
 		cleanup()
@@ -63,8 +67,9 @@ func start() (func(), error) {
 func initialiseProgram() (*app.FxApp, func(), error) {
 	app := &app.FxApp{}
 
-	app.UI = ui.NewUi()
-
+	app.UI = ui.InitializeUi()
+	app.UI.SwitchPage("main page")
+	app.UI.App.SetRoot(app.UI.Pages, true)
 	//FxUser & Lisence Key Start
 	fxUser, err := config.LoadDataFromJson()
 	if err != nil {
@@ -96,6 +101,7 @@ func initialiseProgram() (*app.FxApp, func(), error) {
 	app.FxSession.MessageSequenceNumber = 1
 	app.FxSession.LoggedIn = false
 	log.Println("connected to fix api")
+
 	//FxSesion Done
 
 	//ApiSession Start

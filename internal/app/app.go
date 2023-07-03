@@ -10,9 +10,11 @@ import (
 	"github.com/fasthttp/websocket"
 )
 
+// going to have to log errors here
 func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 	var messageFails int = 0
-
+	app.UI.MainPage.Log("This is a test message", "red")
+	// time.Sleep(time.Second * 3)
 	messageFails = 0
 	var loginFinished bool = false
 	for !loginFinished {
@@ -34,6 +36,7 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 				log.Fatalf("%+v", err)
 			}
 		}
+		app.UI.MainPage.Log("Logged in to ctrader", "green")
 		log.Println("logged in")
 		loginFinished = true
 	}
