@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"net/url"
 	"pollo/config"
 
 	"github.com/fasthttp/websocket"
 )
 
-func CreateApiConnection(cid string) (*websocket.Conn, error) {
+func CreateApiConnection(cid, pools string) (*websocket.Conn, error) {
 	apiAddress, err := config.Config("API_ADDRESS")
 	if err != nil {
 		return nil, err
@@ -35,7 +36,10 @@ func CreateApiConnection(cid string) (*websocket.Conn, error) {
 		Path:     wsPath,
 		RawQuery: rawQuery,
 	}
-	conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	headers := http.Header{
+		"pools": {pools},
+	}
+	conn, _, err := websocket.DefaultDialer.Dial(u.String(), headers)
 	if err != nil {
 		return nil, err
 	}

@@ -1,7 +1,6 @@
 package app
 
 import (
-	"pollo/internal/app/ui"
 	"pollo/pkg/api"
 	"pollo/pkg/fix"
 )
@@ -12,5 +11,4 @@ type FxApp struct {
 	FxUser         fix.FxUser
 	ApiSession     api.ApiSession //done
 	LicenseKey     string         `json:"licenseKey"` //
-	UI             *ui.AppUi
 }

@@ -6,7 +6,6 @@ import (
 	"os"
 	"pollo/config"
 	"pollo/internal/app"
-	"pollo/internal/app/ui"
 	"pollo/pkg/api"
 	"pollo/pkg/fix"
 	"pollo/pkg/shutdown"
@@ -17,11 +16,13 @@ When getting position report, fix sends multiple messages, these  don't always c
 positions may get 3 the first time then 1 the second time, this will mean that all 4 are fetched eventually but may want to make sure that server
 has completely finished sending the messages first
 */
+
 func main() {
 	var exitCode int
 	defer func() {
 		os.Exit(exitCode)
 	}()
+
 	cleanup, err := start()
 	defer cleanup()
 	if err != nil {
@@ -45,19 +46,19 @@ func start() (func(), error) {
 		Run app, all the app specific variables should be kept within this struct
 		May want to add an "isLoggedIn" field to app, in case it is necessary to always logout of FIX
 	*/
-	go app.MainLoop()
-	if err := app.UI.App.Run(); err != nil {
-		log.Println("ui error:", err)
-	}
-	// appErr := app.MainLoop()
-	// if appErr != nil {
-	// 	log.Printf("%v: %s\n", appErr.ErrorCause, appErr.ErrorMessage)
-	// 	return func() {
-	// 		//close app in cleanup
-	// 		log.Println("running cleanup...")
-	// 		cleanup()
-	// 	}, nil
+	// go app.MainLoop()
+	// if err := app.UI.App.Run(); err != nil {
+	// 	log.Println("ui error:", err)
 	// }
+	appErr := app.MainLoop()
+	if appErr != nil {
+		log.Printf("%v: %s\n", appErr.ErrorCause, appErr.ErrorMessage)
+		return func() {
+			//close app in cleanup
+			log.Println("running cleanup...")
+			cleanup()
+		}, nil
+	}
 	return func() {
 		log.Println("running cleanup...")
 		cleanup()
@@ -67,9 +68,6 @@ func start() (func(), error) {
 func initialiseProgram() (*app.FxApp, func(), error) {
 	app := &app.FxApp{}
 
-	app.UI = ui.InitializeUi()
-	app.UI.SwitchPage("main page")
-	app.UI.App.SetRoot(app.UI.Pages, true)
 	//FxUser & Lisence Key Start
 	fxUser, err := config.LoadDataFromJson()
 	if err != nil {
@@ -77,7 +75,7 @@ func initialiseProgram() (*app.FxApp, func(), error) {
 	}
 	app.FxUser = *fxUser
 
-	licenseKey, err := config.LoadLicenseKeyFromJson()
+	licenseKey, pools, err := config.LoadSettingsFromJson()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -86,6 +84,7 @@ func initialiseProgram() (*app.FxApp, func(), error) {
 		return nil, nil, err
 	}
 	app.LicenseKey = licenseKey
+	app.ApiSession.Pools = pools
 	//FxUser & Lisence Key Done
 
 	//FxSession Start
@@ -112,7 +111,7 @@ func initialiseProgram() (*app.FxApp, func(), error) {
 	log.Println("license verified")
 	app.ApiSession.Cid = cid
 
-	apiConn, err := api.CreateApiConnection(app.ApiSession.Cid)
+	apiConn, err := api.CreateApiConnection(app.ApiSession.Cid, pools)
 	if err != nil {
 		return nil, func() {
 			app.CloseExistingConnections()

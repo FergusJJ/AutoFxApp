@@ -47,27 +47,28 @@ func LoadDataFromJson() (readUserData *fix.FxUser, err error) {
 	return readUserData, nil
 }
 
-func LoadLicenseKeyFromJson() (string, error) {
-	jsonFile, err := os.Open("user/settings.json")
+func LoadSettingsFromJson() (string, string, error) {
+	settingFile, err := os.Open("user/settings.json")
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	defer jsonFile.Close()
+	defer settingFile.Close()
 
-	jsonBytes, err := io.ReadAll(jsonFile)
+	jsonBytes, err := io.ReadAll(settingFile)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	type License struct {
+	type Settings struct {
 		LicenseKey string `json:"licenseKey"`
+		Pools      string `json:"pools"`
 	}
-	var license License
-	err = json.Unmarshal(jsonBytes, &license)
+	var settings Settings
+	err = json.Unmarshal(jsonBytes, &settings)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return strings.TrimSpace(license.LicenseKey), nil
+	return strings.TrimSpace(settings.LicenseKey), strings.TrimSpace(settings.Pools), nil
 }

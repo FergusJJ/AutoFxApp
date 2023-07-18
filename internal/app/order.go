@@ -14,7 +14,7 @@ func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (string, err
 	//get oid
 	orderData := &fix.OrderData{
 		Symbol:    fmt.Sprint(copyPosition.SymbolID),
-		Volume:    12000.00,
+		Volume:    float64(copyPosition.Volume),
 		Direction: strings.ToLower(copyPosition.Direction),
 		OrderType: "market",
 	}

@@ -36,7 +36,7 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 				log.Fatalf("%+v", err)
 			}
 		}
-		app.UI.MainPage.Log("Logged in to ctrader", "green")
+		// app.UI.MainPage.Log("Logged in to ctrader", "green")
 		log.Println("logged in")
 		loginFinished = true
 	}

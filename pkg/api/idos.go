@@ -4,6 +4,7 @@ import "github.com/fasthttp/websocket"
 
 type ApiSession struct {
 	Client ApiClient
+	Pools  string
 	Cid    string
 }
 

@@ -2,70 +2,37 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"math/rand"
-	"pollo/internal/app/ui"
 	"time"
+
+	"github.com/gosuri/uilive"
 )
 
-type displayData struct {
-	DID         int
-	DataMessage string
-	Green       bool
-}
+//maybe add lines to a slice, and on each print, iterate and write each one out
+//could try to use the table inside of the writer, or could just append new writer for each position
+//each writer should probably track the last thing they wrote in order to prevent lines that aren't updated from being deleted
+
+//func (w *ScreenWriter) Write(items [int]string){] //if items[0] is empty then do not overwrite w.Writers[0] or something
 
 func main() {
-
-	uiApp := ui.InitializeUi()
-	uiApp.SwitchPage("main page")
-	uiApp.App.SetRoot(uiApp.Pages, true)
-	go func() {
-		for {
-			// Simulate receiving data
-			time.Sleep(2 * time.Second) // Wait for 2 seconds
-			dVal := rand.Intn(100)
-			// Generate a random message
-			message := fmt.Sprintf("Data: %d", dVal)
-			color := "red"
-			if dVal > 50 {
-				color = "green"
-			}
-
-			// Log the message in the second page
-			uiApp.MainPage.Log(message, color)
-			uiApp.App.Draw()
-		}
-	}()
-	go func() {
-		entries := []ui.Entry{
-			ui.Entry{
-				OrderID:      "94878953",
-				ClOrdID:      "3f357761-3c81-4a50-b777-b3d38fd6bd92",
-				ExecType:     "0",
-				OrdStatus:    "0",
-				Symbol:       "3",
-				Side:         "2",
-				TransactTime: "20230630-15:49:07.160",
-				OrderQty:     "120002", LeavesQty: "12000",
-				PosMaintRptID: "52942663"},
-			// Add more entries as needed
-		}
-
-		uiApp.MainPage.Table.AddEntry(entries[0])
-		// uiApp.MainPage.Table.AddEntry(entries[1])
-		// uiApp.MainPage.Table.AddEntry(entries[2])
-		// uiApp.MainPage.Table.AddEntry(entries[3])
-		// uiApp.MainPage.Table.AddEntry(entries[4])
-		// uiApp.MainPage.Table.AddEntry(entries[5])
-		// uiApp.MainPage.Table.AddEntry(entries[6])
-
-		// uiApp.MainPage.Table.RemoveEntry(entries[1].OrderID)
-		uiApp.App.Draw()
-
-	}()
-
-	if uiErr := uiApp.App.Run(); uiErr != nil {
-		log.Fatal("ui err:", uiErr)
+	writer := NewScreenWriter()
+	writer.Writer.Start()
+	for i := 0; i <= 50; i++ {
+		fmt.Fprintf(writer.Writer, "this is line 1 %d\n", i)
+		fmt.Fprintf(writer.Writer.Newline(), "this is line 2\n")
+		time.Sleep(time.Millisecond * 50)
 	}
+	writer.Writer.Stop()
+	time.Sleep(5 * time.Second)
+}
 
+type ScreenWriter struct {
+	Writer *uilive.Writer
+}
+
+func NewScreenWriter() *ScreenWriter {
+	w1 := uilive.New()
+
+	return &ScreenWriter{
+		Writer: w1,
+	}
 }
