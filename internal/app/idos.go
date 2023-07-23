@@ -11,4 +11,5 @@ type FxApp struct {
 	FxUser         fix.FxUser
 	ApiSession     api.ApiSession //done
 	LicenseKey     string         `json:"licenseKey"` //
+	ScreenWriter   *screenWriter
 }

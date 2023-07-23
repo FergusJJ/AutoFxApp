@@ -55,25 +55,27 @@ func start() (func(), error) {
 		log.Printf("%v: %s\n", appErr.ErrorCause, appErr.ErrorMessage)
 		return func() {
 			//close app in cleanup
-			log.Println("running cleanup...")
+			app.ScreenWriter.Write("running cleanup...")
 			cleanup()
 		}, nil
 	}
 	return func() {
-		log.Println("running cleanup...")
+		app.ScreenWriter.Write("running cleanup...")
 		cleanup()
 	}, nil
 }
 
 func initialiseProgram() (*app.FxApp, func(), error) {
-	app := &app.FxApp{}
+
+	App := &app.FxApp{}
+	App.ScreenWriter = app.NewScreenWriter(5)
 
 	//FxUser & Lisence Key Start
 	fxUser, err := config.LoadDataFromJson()
 	if err != nil {
 		return nil, nil, err
 	}
-	app.FxUser = *fxUser
+	App.FxUser = *fxUser
 
 	licenseKey, pools, err := config.LoadSettingsFromJson()
 	if err != nil {
@@ -83,52 +85,51 @@ func initialiseProgram() (*app.FxApp, func(), error) {
 		err = errors.New("licenseKey is empty, update settings.json")
 		return nil, nil, err
 	}
-	app.LicenseKey = licenseKey
-	app.ApiSession.Pools = pools
+	App.LicenseKey = licenseKey
+	App.ApiSession.Pools = pools
 	//FxUser & Lisence Key Done
 
 	//FxSession Start
 
-	fxConn, err := fix.CreateConnection(app.FxUser.HostName, fix.TradePort)
+	fxConn, err := fix.CreateConnection(App.FxUser.HostName, fix.TradePort)
 	if err != nil {
 		//cleanup should involve closing fx connection
 		return nil, func() {
-			app.CloseExistingConnections()
+			App.CloseExistingConnections()
 		}, err
 	}
-	app.FxSession.Connection = fxConn
-	app.FxSession.MessageSequenceNumber = 1
-	app.FxSession.LoggedIn = false
-	log.Println("connected to fix api")
-
+	App.FxSession.Connection = fxConn
+	App.FxSession.MessageSequenceNumber = 1
+	App.FxSession.LoggedIn = false
+	App.ScreenWriter.Write("connected to fix api")
 	//FxSesion Done
 
 	//ApiSession Start
-	cid, err := api.CheckLicense(app.LicenseKey)
+	cid, err := api.CheckLicense(App.LicenseKey)
 	if err != nil {
 		return nil, nil, err
 	}
-	log.Println("license verified")
-	app.ApiSession.Cid = cid
+	App.ScreenWriter.Write("license verified")
+	App.ApiSession.Cid = cid
 
-	apiConn, err := api.CreateApiConnection(app.ApiSession.Cid, pools)
+	apiConn, err := api.CreateApiConnection(App.ApiSession.Cid, pools)
 	if err != nil {
 		return nil, func() {
-			app.CloseExistingConnections()
-			log.Println("closed existing connections")
+			App.CloseExistingConnections()
+			App.ScreenWriter.Write("closed existing connections")
 		}, err
 	}
-	app.ApiSession.Client.Connection = apiConn
-	app.ApiSession.Client.CurrentMessage = make(chan []byte)
-	log.Println("connected to internal api")
+	App.ApiSession.Client.Connection = apiConn
+	App.ApiSession.Client.CurrentMessage = make(chan []byte)
+	App.ScreenWriter.Write("connected to internal api")
 
 	//ApiSesion Done
 
 	//start the actual program, initilse monitoring client via ws,
 	//start the function that will be responsible for sending fix api requests
-	return app, func() {
+	return App, func() {
 		//cleanup operations, i.e. close api ws connection, close fix api session
-		app.CloseExistingConnections()
-		log.Println("closed existing connections")
+		App.CloseExistingConnections()
+		App.ScreenWriter.Write("closed existing connections")
 	}, nil
 }
