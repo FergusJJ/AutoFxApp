@@ -26,7 +26,7 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 			case fix.UserDataError:
 				return err
 			case fix.ConnectionError:
-				app.ScreenWriter.Write("error sending message to FIX, retrying")
+				log.Println("error sending message to FIX, retrying")
 				messageFails++
 				if messageFails > 3 {
 					return err
@@ -37,7 +37,7 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 			}
 		}
 		// app.UI.MainPage.Log("Logged in to ctrader", "green")
-		app.ScreenWriter.Write("logged in")
+		log.Println("logged in")
 		loginFinished = true
 	}
 	app.FxSession.LoggedIn = true
@@ -58,20 +58,20 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 				log.Printf("Got OPEN:%+v\n", newMessage)
 				pid, err := app.OpenPosition(newMessage)
 				if err != nil {
-					app.ScreenWriter.Write(fmt.Sprint("open position error: ", err))
+					log.Println(fmt.Sprint("open position error: ", err))
 					continue
 				}
 				//send pid to db with the copy pid
-				app.ScreenWriter.Write(fmt.Sprint("sending pid:", pid))
+				log.Println(fmt.Sprint("sending pid:", pid))
 			case "CLOSE":
 				log.Printf("Got CLOSE:%+v\n", newMessage)
 				pid, err := app.ClosePosition(newMessage)
 				if err != nil {
-					app.ScreenWriter.Write(fmt.Sprint("close position error: ", err))
+					log.Println(fmt.Sprint("close position error: ", err))
 					continue
 				}
 				//send pid to db with the copy pid
-				app.ScreenWriter.Write(fmt.Sprint("sending pid:", pid))
+				log.Println(fmt.Sprint("sending pid:", pid))
 			default:
 				log.Fatalln("uknown message type sent to the ", err)
 			}

@@ -2,100 +2,91 @@ package app
 
 import (
 	"fmt"
-	"io"
-	"time"
 
-	"github.com/alexeyco/simpletable"
-	"github.com/fatih/color"
-	"github.com/gosuri/uilive"
+	"github.com/charmbracelet/bubbles/table"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
-type screenWriter struct {
-	writer      *uilive.Writer
-	tableWriter io.Writer
-	tableData   []interface{}
-	messages    []string
-	maxLines    int
+var tableStyling = lipgloss.NewStyle().
+	BorderStyle(lipgloss.NormalBorder()).
+	BorderForeground(lipgloss.Color("240"))
+
+type Model struct {
+	headerMsg      string
+	backgroundFeed []string
+	table          table.Model
 }
 
-/*
+// start event loop
+func (m Model) Init() tea.Cmd { return nil }
 
-
-
- */
-
-func NewScreenWriter(maxLines int) *screenWriter {
-	if maxLines < 1 {
-		maxLines = 1
+func NewModel(name string) Model {
+	m := Model{
+		headerMsg:      getHeader(name),
+		backgroundFeed: make([]string, 0),
+		table:          initialiseTable(),
 	}
-	w1 := uilive.New()
-	w2 := w1.Newline()
-
-	return &screenWriter{
-		messages:    []string{},
-		maxLines:    maxLines,
-		writer:      w1,
-		tableWriter: w2,
-		tableData:   nil,
-	}
+	return m
 }
 
-// have this run inside loop
-func (sw *screenWriter) Write(newMessage string) {
-	sw.writer.Start()
+//message could be a signal from a channel indicating that there are changes to positions,
+//
 
-	if newMessage != "" {
-		sw.updateMessages(newMessage)
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	type backendUpdate struct {
+		//type of update, new feed message, new position, etc.
+		//any data that is sent. if feedMessage, this is just a string
+		//if this is a position update then a list of positions, because will want to update all
+		//positions if it is a getActivePositions message. If not then the list of positions will just be
+		//the previous list with some positions added or subtracted
 	}
+	switch msg := msg.(type) {
+	case positionsUpdate:
 
-	if sw.tableData != nil {
-		fmt.Fprint(sw.tableWriter, sw.getTable())
-	}
-	for _, message := range sw.messages {
-		if message == "" {
-			continue
+	case feedUpdate:
+
+	case tea.KeyMsg:
+		if msg.Type == tea.KeyCtrlC {
+			return m, tea.Quit
 		}
-		color.New(color.FgYellow).Fprintln(sw.writer, message)
+		if msg.String() == "q" {
+			return m, tea.Quit
+		}
 	}
-	sw.writer.Flush()
-	sw.writer.Stop()
+	return m, nil
 }
 
-func (sw *screenWriter) updateMessages(message string) {
-	message = formatMessage(message)
-	if len(sw.messages) == sw.maxLines {
-		sw.messages = sw.messages[1:]
+func (m Model) View() string {
+	//initialise view with header
+	s := m.headerMsg
+
+	//append the table on to the message
+	s += tableStyling.Render(m.table.View())
+	s += "\n"
+
+	//append the feed messages
+	for _, msg := range m.backgroundFeed {
+		s += fmt.Sprintf("%s\n", msg)
 	}
-	sw.messages = append(sw.messages, message)
+
+	s += "\nPress q to quit.\n"
+	return s
 }
 
-func formatMessage(message string) string {
-	currentTime := time.Now()
-	return fmt.Sprintf("%s %s", currentTime.Format("15:04:05"), message)
-}
-
-func (sw *screenWriter) getTable() string {
-	table := simpletable.New()
-	table.Header = &simpletable.Header{
-		Cells: []*simpletable.Cell{
-			{Align: simpletable.AlignCenter, Text: "#"},
-			{Align: simpletable.AlignCenter, Text: "Symbol"},
-			{Align: simpletable.AlignCenter, Text: "Volume"},
-			{Align: simpletable.AlignCenter, Text: "Direction"},
-			{Align: simpletable.AlignCenter, Text: "EntryPrice"},
-			{Align: simpletable.AlignCenter, Text: "CurrentPrice"},
-			{Align: simpletable.AlignCenter, Text: "GrossProfitEUR"},
-			{Align: simpletable.AlignCenter, Text: "NetProfitEUR"},
-		},
+func (m *Model) updateMessages(messages ...string) {
+	if len(messages) == 0 {
+		return
 	}
-	/*
-		Range through data, append all data to cols
-	*/
+	//if amount of messages < 5; then update messages, if length exceeds 5, then remove oldest message
+	for _, msg := range messages {
+		if len(m.backgroundFeed) < 5 {
+			m.backgroundFeed = append(m.backgroundFeed, msg)
+		} else {
+			tmpFeed := m.backgroundFeed[1:]
+			tmpFeed = append(tmpFeed, msg)
+			m.backgroundFeed = tmpFeed
+		}
 
-	/*
-		Add any footers if necessary
-	*/
-
-	table.SetStyle(simpletable.StyleCompactLite)
-	return table.String()
+	}
 }

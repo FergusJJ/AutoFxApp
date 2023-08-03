@@ -55,12 +55,12 @@ func start() (func(), error) {
 		log.Printf("%v: %s\n", appErr.ErrorCause, appErr.ErrorMessage)
 		return func() {
 			//close app in cleanup
-			app.ScreenWriter.Write("running cleanup...")
+			log.Println("running cleanup...")
 			cleanup()
 		}, nil
 	}
 	return func() {
-		app.ScreenWriter.Write("running cleanup...")
+		log.Println("running cleanup...")
 		cleanup()
 	}, nil
 }
@@ -68,7 +68,6 @@ func start() (func(), error) {
 func initialiseProgram() (*app.FxApp, func(), error) {
 
 	App := &app.FxApp{}
-	App.ScreenWriter = app.NewScreenWriter(5)
 
 	//FxUser & Lisence Key Start
 	fxUser, err := config.LoadDataFromJson()
@@ -101,7 +100,7 @@ func initialiseProgram() (*app.FxApp, func(), error) {
 	App.FxSession.Connection = fxConn
 	App.FxSession.MessageSequenceNumber = 1
 	App.FxSession.LoggedIn = false
-	App.ScreenWriter.Write("connected to fix api")
+	log.Println("connected to fix api")
 	//FxSesion Done
 
 	//ApiSession Start
@@ -109,19 +108,19 @@ func initialiseProgram() (*app.FxApp, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	App.ScreenWriter.Write("license verified")
+	log.Println("license verified")
 	App.ApiSession.Cid = cid
 
 	apiConn, err := api.CreateApiConnection(App.ApiSession.Cid, pools)
 	if err != nil {
 		return nil, func() {
 			App.CloseExistingConnections()
-			App.ScreenWriter.Write("closed existing connections")
+			log.Println("closed existing connections")
 		}, err
 	}
 	App.ApiSession.Client.Connection = apiConn
 	App.ApiSession.Client.CurrentMessage = make(chan []byte)
-	App.ScreenWriter.Write("connected to internal api")
+	log.Println("connected to internal api")
 
 	//ApiSesion Done
 
@@ -130,6 +129,6 @@ func initialiseProgram() (*app.FxApp, func(), error) {
 	return App, func() {
 		//cleanup operations, i.e. close api ws connection, close fix api session
 		App.CloseExistingConnections()
-		App.ScreenWriter.Write("closed existing connections")
+		log.Println("closed existing connections")
 	}, nil
 }
