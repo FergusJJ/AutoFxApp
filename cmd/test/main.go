@@ -24,9 +24,19 @@ func cmdWithArg(funcToRun func()) tea.Cmd {
 */
 
 func main() {
-	fmt.Println("initialising stuff")
-	time.Sleep(time.Second * 5)
 	p := tea.NewProgram(app.NewModel("fergus"))
+	go func() {
+		totalPositions := []app.PositionMessage{}
+
+		for {
+			pause := time.Duration(5000) * time.Millisecond // nolint:gosec
+			time.Sleep(pause)
+			newMessage := app.PositionMessage{ID: pause.String(), Direction: "SELL"}
+			totalPositions = append(totalPositions, newMessage)
+			p.Send(app.PositionMessageSlice(totalPositions))
+			p.Send(app.FeedUpdate("hello"))
+		}
+	}()
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)
 		os.Exit(1)

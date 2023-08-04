@@ -14,7 +14,8 @@ var tableStyling = lipgloss.NewStyle().
 
 type Model struct {
 	headerMsg      string
-	backgroundFeed []string
+	backgroundFeed []FeedUpdate
+	positions      []PositionMessage
 	table          table.Model
 }
 
@@ -24,28 +25,28 @@ func (m Model) Init() tea.Cmd { return nil }
 func NewModel(name string) Model {
 	m := Model{
 		headerMsg:      getHeader(name),
-		backgroundFeed: make([]string, 0),
+		backgroundFeed: make([]FeedUpdate, 0),
+		positions:      make([]PositionMessage, 0),
 		table:          initialiseTable(),
 	}
 	return m
 }
 
-//message could be a signal from a channel indicating that there are changes to positions,
-//
-
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	type backendUpdate struct {
-		//type of update, new feed message, new position, etc.
-		//any data that is sent. if feedMessage, this is just a string
-		//if this is a position update then a list of positions, because will want to update all
-		//positions if it is a getActivePositions message. If not then the list of positions will just be
-		//the previous list with some positions added or subtracted
-	}
+
 	switch msg := msg.(type) {
-	case positionsUpdate:
+	case PositionMessageSlice:
+		// return m, tea.Quit
+		tmpPositions := []PositionMessage{}
+		for _, v := range msg {
+			tmpPositions = append(tmpPositions, v)
+		}
+		m.positions = tmpPositions
+		return m, nil
+	case FeedUpdate:
 
-	case feedUpdate:
-
+		m.updateMessages(FeedUpdate(msg))
+		return m, nil
 	case tea.KeyMsg:
 		if msg.Type == tea.KeyCtrlC {
 			return m, tea.Quit
@@ -53,6 +54,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "q" {
 			return m, tea.Quit
 		}
+	default:
 	}
 	return m, nil
 }
@@ -62,6 +64,11 @@ func (m Model) View() string {
 	s := m.headerMsg
 
 	//append the table on to the message
+	rows := []table.Row{}
+	for _, v := range m.positions {
+		rows = append(rows, []string{v.ID, v.Direction})
+	}
+	m.table.SetRows(rows)
 	s += tableStyling.Render(m.table.View())
 	s += "\n"
 
@@ -74,7 +81,7 @@ func (m Model) View() string {
 	return s
 }
 
-func (m *Model) updateMessages(messages ...string) {
+func (m *Model) updateMessages(messages ...FeedUpdate) {
 	if len(messages) == 0 {
 		return
 	}

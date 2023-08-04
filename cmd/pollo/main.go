@@ -8,7 +8,8 @@ import (
 	"pollo/internal/app"
 	"pollo/pkg/api"
 	"pollo/pkg/fix"
-	"pollo/pkg/shutdown"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 /*
@@ -30,34 +31,42 @@ func main() {
 		exitCode = 1
 		return
 	}
-
-	shutdown.Gracefully()
+	//shutdown.Gracefully()
 }
 
 func start() (func(), error) {
-	//verify with whop
-	//load user data, check they have access
-
+	done := make(chan struct{})
+	backendErrChan := make(chan error, 1)
+	errChan := make(chan error, 1)
 	app, cleanup, err := initialiseProgram()
 	if err != nil {
 		return nil, err
 	}
-	/*
-		Run app, all the app specific variables should be kept within this struct
-		May want to add an "isLoggedIn" field to app, in case it is necessary to always logout of FIX
-	*/
-	// go app.MainLoop()
-	// if err := app.UI.App.Run(); err != nil {
-	// 	log.Println("ui error:", err)
-	// }
-	appErr := app.MainLoop()
-	if appErr != nil {
-		log.Printf("%v: %s\n", appErr.ErrorCause, appErr.ErrorMessage)
-		return func() {
-			//close app in cleanup
-			log.Println("running cleanup...")
-			cleanup()
-		}, nil
+	go func() {
+		defer close(done)
+		app.MainLoop()
+	}()
+	errChan <- func() error {
+		_, err := app.Progam.Run()
+		if err != nil {
+			return err
+		}
+		return nil
+	}()
+	select {
+	case err := <-errChan:
+		if err != nil {
+			log.Println("ui error:", err)
+			return cleanup, err
+		}
+	case err := <-backendErrChan:
+		if err != nil {
+			if err != nil {
+				log.Println("backend error:", err)
+				return cleanup, err
+			}
+		}
+	case <-done:
 	}
 	return func() {
 		log.Println("running cleanup...")
@@ -68,7 +77,7 @@ func start() (func(), error) {
 func initialiseProgram() (*app.FxApp, func(), error) {
 
 	App := &app.FxApp{}
-
+	App.Progam = tea.NewProgram(app.NewModel("fergus"))
 	//FxUser & Lisence Key Start
 	fxUser, err := config.LoadDataFromJson()
 	if err != nil {

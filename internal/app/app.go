@@ -14,7 +14,6 @@ import (
 // going to have to log errors here
 func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 	var messageFails int = 0
-	// time.Sleep(time.Second * 3)
 	messageFails = 0
 	var loginFinished bool = false
 	for !loginFinished {
@@ -26,7 +25,7 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 			case fix.UserDataError:
 				return err
 			case fix.ConnectionError:
-				log.Println("error sending message to FIX, retrying")
+				app.Progam.Send(FeedUpdate("error sending message to FIX, retrying"))
 				messageFails++
 				if messageFails > 3 {
 					return err
@@ -36,8 +35,7 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 				log.Fatalf("%+v", err)
 			}
 		}
-		// app.UI.MainPage.Log("Logged in to ctrader", "green")
-		log.Println("logged in")
+		app.Progam.Send(FeedUpdate("Logged in to ctrader"))
 		loginFinished = true
 	}
 	app.FxSession.LoggedIn = true
@@ -55,23 +53,23 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 			}
 			switch newMessage.MessageType {
 			case "OPEN":
-				log.Printf("Got OPEN:%+v\n", newMessage)
+				app.Progam.Send(FeedUpdate(fmt.Sprintf("Got OPEN:%+v\n", newMessage)))
 				pid, err := app.OpenPosition(newMessage)
 				if err != nil {
-					log.Println(fmt.Sprint("open position error: ", err))
+					app.Progam.Send(FeedUpdate(fmt.Sprint("open position error: ", err)))
 					continue
 				}
 				//send pid to db with the copy pid
-				log.Println(fmt.Sprint("sending pid:", pid))
+				app.Progam.Send(FeedUpdate(fmt.Sprint("sending pid:", pid)))
 			case "CLOSE":
-				log.Printf("Got CLOSE:%+v\n", newMessage)
+				app.Progam.Send(FeedUpdate(fmt.Sprintf("Got CLOSE:%+v\n", newMessage)))
 				pid, err := app.ClosePosition(newMessage)
 				if err != nil {
-					log.Println(fmt.Sprint("close position error: ", err))
+					app.Progam.Send(FeedUpdate(fmt.Sprint("close position error: ", err)))
 					continue
 				}
 				//send pid to db with the copy pid
-				log.Println(fmt.Sprint("sending pid:", pid))
+				app.Progam.Send(FeedUpdate(fmt.Sprint("sending pid:", pid)))
 			default:
 				log.Fatalln("uknown message type sent to the ", err)
 			}
