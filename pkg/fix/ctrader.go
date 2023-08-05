@@ -87,7 +87,6 @@ func (session *FxSession) CtraderNewOrderSingle(user FxUser, orderData OrderData
 			ErrorCause:   ProgramError,
 		}
 	}
-	log.Println("Order message", orderMessage)
 	resp := session.sendMessage(orderMessage, user)
 	if resp.err != nil {
 		return nil, &ErrorWithCause{
@@ -95,7 +94,6 @@ func (session *FxSession) CtraderNewOrderSingle(user FxUser, orderData OrderData
 			ErrorCause:   ConnectionError,
 		}
 	}
-	log.Println("Order response", string(resp.body))
 	bodyStringSlice := preparseBody(resp.body)
 	respType, parsedResp, err := ParseFIXResponse(bodyStringSlice[0], NewOrderSingle)
 	if err != nil {
@@ -210,7 +208,6 @@ func (session *FxSession) CtraderRequestForPositions(user FxUser) *ErrorWithCaus
 		}
 		positionReports = append(positionReports, positionReportCast)
 	}
-	log.Println(len(positionReports))
 	session.MessageSequenceNumber++
 	return nil
 }

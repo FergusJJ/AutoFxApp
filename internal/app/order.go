@@ -18,16 +18,16 @@ func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (string, err
 		Direction: strings.ToLower(copyPosition.Direction),
 		OrderType: "market",
 	}
-	log.Println(orderData)
+
 	executionReport, fxErr := app.FxSession.CtraderNewOrderSingle(app.FxUser, *orderData)
 	if fxErr != nil {
 		switch fxErr.ErrorCause {
 		case fix.ProgramError:
 			log.Fatal(fxErr.ErrorMessage)
 		case fix.ConnectionError:
-			log.Printf("connection error whilst attempting to open position: %s", fxErr.ErrorMessage)
+			app.Progam.Send(FeedUpdate(fmt.Sprintf("connection error whilst attempting to open position: %s", fxErr.ErrorMessage)))
 		case fix.MarketError:
-			log.Println(fxErr.ErrorMessage)
+			app.Progam.Send(FeedUpdate(fmt.Sprintf(fxErr.ErrorMessage)))
 		case fix.UserDataError:
 			log.Fatal(fxErr.ErrorMessage)
 		}

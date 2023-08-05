@@ -19,14 +19,24 @@ type (
 )
 
 func getHeader(name string) string {
-	header := fmt.Sprintf("Welcome %s | CopyFX - Version 0.1\n\n", name)
+
+	var headerStyle = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FAFAFA")).
+		Background(lipgloss.Color("#7D56F4"))
+
+	header := headerStyle.Render(fmt.Sprintf("Welcome %s | CopyFX - Version 0.1", name))
 	return header
 }
 
 func initialiseTable() table.Model {
 
+	var colStyling = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#0000ff"))
+	thisPID := colStyling.Render("PID")
 	cols := []table.Column{
-		{Title: "PID", Width: 12},
+		{Title: thisPID, Width: 12},
 		{Title: "DIRECTION", Width: 10},
 	}
 	rows := []table.Row{}

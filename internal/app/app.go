@@ -42,6 +42,7 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 	app.FxSession.GotSecurityList = true
 	//need to start function that will monitor here:
 	go app.ApiSession.ListenForMessages()
+
 	//need to start function that will display open positions here:
 	for {
 		select {
@@ -79,10 +80,11 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 			//could maybe just poll current orders here?
 			//poll position
 			//check for updates, if none continue, else update the table
-			// fxErr := app.FxSession.CtraderRequestForPositions(app.FxUser)
-			// if fxErr != nil {
-			// 	log.Panicf("%+v", fxErr)
-			// }
+			fxErr := app.FxSession.CtraderRequestForPositions(app.FxUser)
+			if fxErr != nil {
+				log.Panicf("%+v", fxErr)
+			}
+
 			time.Sleep(2 * time.Second)
 			continue
 		}
@@ -95,7 +97,7 @@ func (app *FxApp) CloseExistingConnections() {
 		//this will never panic, so logging error is fine
 		err := app.FxSession.Connection.Close()
 		if err != nil {
-			log.Printf("error closing connection to FIX: %s", err.Error())
+			app.Progam.Send(FeedUpdate(fmt.Sprintf("error closing connection to FIX: %s", err.Error())))
 		}
 	}
 
@@ -105,12 +107,12 @@ func (app *FxApp) CloseExistingConnections() {
 			websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
 		)
 		if err != nil {
-			log.Printf("error writing close to API: %s", err.Error())
+			app.Progam.Send(FeedUpdate(fmt.Sprintf("error writing close to API: %s", err.Error())))
 		}
 		//this will never panic, so logging error is fine
 		err = app.ApiSession.Client.Connection.Close()
 		if err != nil {
-			log.Printf("error closing connection to API: %s", err.Error())
+			app.Progam.Send(FeedUpdate(fmt.Sprintf("error closing connection to API: %s", err.Error())))
 		}
 	}
 }

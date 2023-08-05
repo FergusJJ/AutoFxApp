@@ -9,7 +9,7 @@ import (
 )
 
 var tableStyling = lipgloss.NewStyle().
-	BorderStyle(lipgloss.NormalBorder()).
+	BorderStyle(lipgloss.RoundedBorder()).
 	BorderForeground(lipgloss.Color("240"))
 
 type Model struct {
@@ -44,7 +44,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.positions = tmpPositions
 		return m, nil
 	case FeedUpdate:
-
 		m.updateMessages(FeedUpdate(msg))
 		return m, nil
 	case tea.KeyMsg:
@@ -61,7 +60,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string {
 	//initialise view with header
+
 	s := m.headerMsg
+	s += "\n"
 
 	//append the table on to the message
 	rows := []table.Row{}

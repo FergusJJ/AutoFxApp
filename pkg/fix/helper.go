@@ -2,7 +2,6 @@ package fix
 
 import (
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -44,7 +43,6 @@ func ParseFIXResponse(body []string, messageType CtraderSessionMessageType) (str
 			if err != nil {
 				log.Fatal(err)
 			}
-			log.Println(positionReport)
 			return "AP", positionReport, nil
 		default:
 			log.Fatalf("case %s not handled for RequestForPositions in ParseFIXResponse", messageBodyAndTag.Tag)
@@ -113,8 +111,6 @@ func ParseFIXResponse(body []string, messageType CtraderSessionMessageType) (str
 		}
 	//for when no response data is needed
 	default:
-		log.Println("got good response:")
-		log.Println(messageBodyAndTag.MessageBody)
 
 		return "", nil, nil
 	}
@@ -202,7 +198,6 @@ func preparseBody(positionReport []byte) [][]string {
 		}
 		tmpSlice = append(tmpSlice, tagAndVal)
 		if tagValSlice[0] == "10" {
-			fmt.Println(tmpSlice)
 			individualMessages = append(individualMessages, tmpSlice)
 			tmpSlice = []string{}
 		}
