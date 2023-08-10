@@ -19,6 +19,7 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 	for !loginFinished {
 		err = app.FxSession.CtraderLogin(app.FxUser)
 		if err != nil {
+			app.Progam.Send(FeedUpdate(err.ErrorMessage))
 			switch err.ErrorCause {
 			case fix.ProgramError:
 				return err
@@ -30,19 +31,28 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 				if messageFails > 3 {
 					return err
 				}
-				//should never happen
+
 			default:
 				log.Fatalf("%+v", err)
 			}
+			continue
 		}
 		app.Progam.Send(FeedUpdate("Logged in to ctrader"))
 		loginFinished = true
 	}
+	// app.FxSession
+
 	app.FxSession.LoggedIn = true
 	app.FxSession.GotSecurityList = true
 	//need to start function that will monitor here:
 	go app.ApiSession.ListenForMessages()
-
+	// success, newPos := app.OpenPosition(nil)
+	// if !success {
+	// 	log.Fatalf("unsuccessful")
+	// }
+	symbol := fmt.Sprint(1)
+	app.FxSession.NewMarketDataSubscription(symbol)
+	// app.Progam.Send(FeedUpdate(fmt.Sprint(*newPos)))
 	//need to start function that will display open positions here:
 	for {
 		select {
@@ -54,51 +64,69 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 			}
 			switch newMessage.MessageType {
 			case "OPEN":
-				app.Progam.Send(FeedUpdate(fmt.Sprintf("Got OPEN:%+v\n", newMessage)))
-				pid, err := app.OpenPosition(newMessage)
-				if err != nil {
-					app.Progam.Send(FeedUpdate(fmt.Sprint("open position error: ", err)))
+				success, newPos := app.OpenPosition(newMessage)
+				if !success {
 					continue
 				}
-				//send pid to db with the copy pid
-				app.Progam.Send(FeedUpdate(fmt.Sprint("sending pid:", pid)))
+				app.FxSession.Positions[newPos.CopyPID] = *newPos
+				//need to send PID:CopyPID pair to DB
+				//
+				symbol := fmt.Sprint(newMessage.SymbolID)
+				app.FxSession.NewMarketDataSubscription(symbol)
 			case "CLOSE":
 				app.Progam.Send(FeedUpdate(fmt.Sprintf("Got CLOSE:%+v\n", newMessage)))
-				pid, err := app.ClosePosition(newMessage)
-				if err != nil {
-					app.Progam.Send(FeedUpdate(fmt.Sprint("close position error: ", err)))
-					continue
-				}
-				//send pid to db with the copy pid
-				app.Progam.Send(FeedUpdate(fmt.Sprint("sending pid:", pid)))
+
+				// pid, err := app.ClosePosition(newMessage)
+				// if err != nil {
+				// 	app.Progam.Send(FeedUpdate(fmt.Sprint("close position error: ", err)))
+				// 	continue
+				// }
+
+				//if successful, check remove subscription
+				//but remove position from Positions first
+
+				symbol := fmt.Sprint(newMessage.SymbolID)
+				app.FxSession.CheckRemoveMarketDataSubscription(symbol)
+
 			default:
 				log.Fatalln("uknown message type sent to the ", err)
 			}
-			//unmarshal into json
-			//need to check what the message is here, execute message
 		default:
-			//could maybe just poll current orders here?
-			//poll position
-			//check for updates, if none continue, else update the table
-			fxErr := app.FxSession.CtraderRequestForPositions(app.FxUser)
-			if fxErr != nil {
-				log.Panicf("%+v", fxErr)
+			//send marketDataRequests, and then update ui
+			app.Progam.Send(FeedUpdate("updating position data"))
+			var marketDataSnapshots []fix.MarketDataSnapshot
+			for _, subscription := range app.FxSession.MarketDataSubscriptions {
+				marketDataSnapshot, err := app.FxSession.CtraderMarketDataRequest(app.FxUser, *subscription)
+				if err != nil {
+					app.Progam.Send(FeedUpdate(fmt.Sprintf("error getting symbol data: %s", err.ErrorMessage)))
+					continue
+				}
+				marketDataSnapshots = append(marketDataSnapshots, marketDataSnapshot...)
 			}
 
-			time.Sleep(2 * time.Second)
+			time.Sleep(10 * time.Second)
 			continue
 		}
 	}
-	return nil
 }
 
 func (app *FxApp) CloseExistingConnections() {
-	if app.FxSession.Connection != nil {
+	if app.FxSession.TradeClient != nil {
 		//this will never panic, so logging error is fine
-		err := app.FxSession.Connection.Close()
+		err := app.FxSession.TradeClient.Close()
 		if err != nil {
 			app.Progam.Send(FeedUpdate(fmt.Sprintf("error closing connection to FIX: %s", err.Error())))
 		}
+		app.FxSession.TradeClient = nil
+	}
+
+	if app.FxSession.PriceClient != nil {
+		err := app.FxSession.PriceClient.Close()
+		if err != nil {
+			app.Progam.Send(FeedUpdate(fmt.Sprintf("error closing connection to FIX: %s", err.Error())))
+		}
+		app.FxSession.PriceClient = nil
+
 	}
 
 	if app.ApiSession.Client.Connection != nil {
@@ -114,5 +142,6 @@ func (app *FxApp) CloseExistingConnections() {
 		if err != nil {
 			app.Progam.Send(FeedUpdate(fmt.Sprintf("error closing connection to API: %s", err.Error())))
 		}
+		app.ApiSession.Client.Connection = nil
 	}
 }

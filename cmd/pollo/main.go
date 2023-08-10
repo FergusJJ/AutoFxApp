@@ -8,6 +8,7 @@ import (
 	"pollo/internal/app"
 	"pollo/pkg/api"
 	"pollo/pkg/fix"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -98,15 +99,24 @@ func initialiseProgram() (*app.FxApp, func(), error) {
 	//FxUser & Lisence Key Done
 
 	//FxSession Start
-
-	fxConn, err := fix.CreateConnection(App.FxUser.HostName, fix.TradePort)
-	if err != nil {
-		//cleanup should involve closing fx connection
+	timeout := time.Duration(10 * time.Second)
+	fxPriceClient := fix.NewTCPClient(App.FxUser.HostName, fix.PricePort, timeout, 4096)
+	if err = fxPriceClient.Dial(); err != nil {
 		return nil, func() {
 			App.CloseExistingConnections()
+			log.Println("closed existing connections")
 		}, err
 	}
-	App.FxSession.Connection = fxConn
+	fxTradeClient := fix.NewTCPClient(App.FxUser.HostName, fix.TradePort, timeout, 4096)
+	if err = fxTradeClient.Dial(); err != nil {
+		return nil, func() {
+			App.CloseExistingConnections()
+			log.Println("closed existing connections")
+		}, err
+	}
+
+	App.FxSession.TradeClient = fxTradeClient
+	App.FxSession.PriceClient = fxPriceClient
 	App.FxSession.MessageSequenceNumber = 1
 	App.FxSession.LoggedIn = false
 	log.Println("connected to fix api")
@@ -115,7 +125,10 @@ func initialiseProgram() (*app.FxApp, func(), error) {
 	//ApiSession Start
 	cid, err := api.CheckLicense(App.LicenseKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, func() {
+			App.CloseExistingConnections()
+			log.Println("closed existing connections")
+		}, err
 	}
 	log.Println("license verified")
 	App.ApiSession.Cid = cid

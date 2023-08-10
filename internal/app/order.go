@@ -5,39 +5,148 @@ import (
 	"log"
 	"pollo/pkg/api"
 	"pollo/pkg/fix"
+	"strconv"
 	"strings"
+	"time"
 )
 
-// may need to make sure that connection is not being written to by the update position part?
-// haven't decided whether I want to always return errors here or not, probably will, but will just print twice now for time being
-func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (string, error) {
+// might want to change from OrderType market, to Limit, user may specify limit
+func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (bool, *fix.Position) {
 	//get oid
-	orderData := &fix.OrderData{
+	if copyPosition == nil {
+		copyPosition = &api.ApiMonitorMessage{
+			SymbolID:  1,
+			Volume:    2000,
+			Direction: "sell",
+		}
+	}
+	orderData := fix.OrderData{
 		Symbol:    fmt.Sprint(copyPosition.SymbolID),
 		Volume:    float64(copyPosition.Volume),
 		Direction: strings.ToLower(copyPosition.Direction),
 		OrderType: "market",
 	}
 
-	executionReport, fxErr := app.FxSession.CtraderNewOrderSingle(app.FxUser, *orderData)
+	executionReport, fxErr := app.FxSession.CtraderNewOrderSingle(app.FxUser, orderData)
 	if fxErr != nil {
 		switch fxErr.ErrorCause {
 		case fix.ProgramError:
-			log.Fatal(fxErr.ErrorMessage)
+			log.Fatalf("program error: %s", fxErr.ErrorMessage)
 		case fix.ConnectionError:
-			app.Progam.Send(FeedUpdate(fmt.Sprintf("connection error whilst attempting to open position: %s", fxErr.ErrorMessage)))
+			app.Progam.Send(FeedUpdate(fmt.Sprintf("client error whilst attempting to open position: %s", fxErr.ErrorMessage)))
 		case fix.MarketError:
 			app.Progam.Send(FeedUpdate(fmt.Sprintf(fxErr.ErrorMessage)))
-		case fix.UserDataError:
-			log.Fatal(fxErr.ErrorMessage)
+		}
+		return false, nil
+	}
+	var pollTimeout = time.Millisecond * 1500
+	// The expected status
+	for {
+		switch executionReport.ExecType {
+		case "0":
+			app.Progam.Send(FeedUpdate("order in progress..."))
+			time.Sleep(pollTimeout)
+		case "4":
+			app.Progam.Send(FeedUpdate("order was cancelled"))
+			return false, nil
+		case "8":
+			app.Progam.Send(FeedUpdate(fmt.Sprintf("order rejected: %s", executionReport.Text)))
+			return false, nil
+		case "C":
+			app.Progam.Send(FeedUpdate("order expired"))
+			return false, nil
+		case "F":
+			app.Progam.Send(FeedUpdate("order was executed"))
+			if executionReport.OrdStatus == "1" {
+				app.Progam.Send(FeedUpdate("order could only be partially filled"))
+			}
+			avgPx, err := strconv.ParseFloat(executionReport.AvgPx, 64)
+			if err != nil {
+				log.Fatalf("Error parsing float from :%s", executionReport.AvgPx)
+			}
+			positionData := &fix.Position{
+				PID:     executionReport.PosMaintRptID,
+				CopyPID: copyPosition.CopyPID,
+				Side:    copyPosition.Direction,
+				Symbol:  fmt.Sprint(copyPosition.SymbolID),
+				AvgPx:   avgPx,
+			}
+
+			return true, positionData
+
+		//this shouldn't happen yet
+		//if/when support added, will just need to update the volume of the position i think
+		case "5":
+			app.Progam.Send(FeedUpdate("order was replaced"))
+			return false, nil
+			//update positions
+		case "I":
+			log.Fatalf("in OpenPosition ExecType: %+v", executionReport)
+		}
+		clOrdID := executionReport.ClOrdID
+		executionReport, fxErr = app.FxSession.CtraderOrderStatus(app.FxUser, clOrdID)
+		if fxErr != nil {
+			switch fxErr.ErrorCause {
+			case fix.ProgramError:
+				log.Fatalf("program error: %s", fxErr.ErrorMessage)
+			case fix.ConnectionError:
+				app.Progam.Send(FeedUpdate(fmt.Sprintf("client error whilst polling order status: %s", fxErr.ErrorMessage)))
+			case fix.MarketError:
+				app.Progam.Send(FeedUpdate(fmt.Sprintf(fxErr.ErrorMessage)))
+			}
+			return false, nil
 		}
 	}
-	log.Fatalf("%+v", executionReport)
-	return "", nil
 }
+
+/*
+	[11:fa047931-4d8c-4bfa-ba69-7e47db59897f
+	14:0
+	37:99501203
+	38:2000
+	39:0
+	40:1
+	54:2
+	55:1
+	59:3
+	60:20230808-13:26:33.827
+	150:0
+	151:2000
+	721:55019091]}
+*/
 
 func (app *FxApp) ClosePosition(copyPosition *api.ApiMonitorMessage) (string, error) {
 	return "", nil
+}
+
+func (app *FxApp) FetchPositions() ([]string, *fix.ErrorWithCause) {
+	positionReports, fxErr := app.FxSession.CtraderRequestForPositions(app.FxUser)
+	if fxErr != nil {
+		//log error to feed, don't update positions
+		return []string{}, fxErr
+	}
+	//need to get a slice containing the position ids, with their volume, entry price, and symbol
+	positionReportString := ""
+	for _, v := range positionReports {
+		vol := v.LongQty
+		if v.LongQty == "0" {
+			vol = v.ShortQty
+		}
+		positionReportString += fmt.Sprintf("Position id: %s | Volume: %s | Symbol: %s \n ", v.PosMaintRptID, vol, v.Symbol)
+	}
+	if positionReportString == "" {
+		app.Progam.Send("No updates")
+	}
+	app.Progam.Send(FeedUpdate(positionReportString))
+	// fxErr = app.FxSession.CtraderMarketDataRequest(app.FxUser)
+	// if fxErr != nil {
+	// 	return []string{}, fxErr
+	// }
+	return []string{}, nil
+}
+
+func (app *FxApp) GetPositionInformation() {
+	//send all marketDataSubscriptions
 }
 
 /*

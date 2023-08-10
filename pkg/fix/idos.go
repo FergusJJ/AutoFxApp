@@ -1,6 +1,6 @@
 package fix
 
-import "crypto/tls"
+import "sync"
 
 const TradePort = 5212
 const PricePort = 5211
@@ -14,11 +14,15 @@ type FxUser struct {
 }
 
 type FxSession struct {
-	GotSecurityList       bool
-	LoggedIn              bool
-	SecListPairs          map[string]string
-	MessageSequenceNumber int
-	Connection            *tls.Conn
+	mtx                     sync.Mutex
+	GotSecurityList         bool
+	LoggedIn                bool
+	SecListPairs            map[string]string
+	MarketDataSubscriptions map[string]*MarketDataSubscription //key should be symbolID
+	Positions               map[string]Position                //key should be copy position id
+	MessageSequenceNumber   int
+	PriceClient             *FixClient
+	TradeClient             *FixClient
 }
 
 type FxResponse struct {
@@ -71,37 +75,37 @@ type ExecutionReport struct {
 	GuaranteedSL    string `json:"GuaranteedSL,omitempty"`
 }
 
-var executionReportTagMapping = map[string]string{
-	"37":   "OrderID",
-	"11":   "ClOrdID",
-	"911":  "TotNumReports",
-	"150":  "ExecType",
-	"39":   "OrdStatus",
-	"55":   "Symbol",
-	"54":   "Side",
-	"60":   "TransactTime",
-	"6":    "AvgPx",
-	"38":   "OrderQty",
-	"151":  "LeavesQty",
-	"14":   "CumQty",
-	"32":   "LastQty",
-	"40":   "OrdType",
-	"44":   "Price",
-	"99":   "StopPx",
-	"59":   "TimeInForce",
-	"126":  "ExpireTime",
-	"58":   "Text",
-	"103":  "OrdRejReason",
-	"721":  "PosMaintRptID",
-	"494":  "Designation",
-	"584":  "MassStatusReqID",
-	"1000": "AbsoluteTP",
-	"1001": "RelativeTP",
-	"1002": "AbsoluteSL",
-	"1003": "RelativeSL",
-	"1004": "TrailingSL",
-	"1005": "TriggerMethodSL",
-	"1006": "GuaranteedSL",
+var executionReportTagMapping = map[int]string{
+	37:   "OrderID",
+	11:   "ClOrdID",
+	911:  "TotNumReports",
+	150:  "ExecType",
+	39:   "OrdStatus",
+	55:   "Symbol",
+	54:   "Side",
+	60:   "TransactTime",
+	6:    "AvgPx",
+	38:   "OrderQty",
+	151:  "LeavesQty",
+	14:   "CumQty",
+	32:   "LastQty",
+	40:   "OrdType",
+	44:   "Price",
+	99:   "StopPx",
+	59:   "TimeInForce",
+	126:  "ExpireTime",
+	58:   "Text",
+	103:  "OrdRejReason",
+	721:  "PosMaintRptID",
+	494:  "Designation",
+	584:  "MassStatusReqID",
+	1000: "AbsoluteTP",
+	1001: "RelativeTP",
+	1002: "AbsoluteSL",
+	1003: "RelativeSL",
+	1004: "TrailingSL",
+	1005: "TriggerMethodSL",
+	1006: "GuaranteedSL",
 }
 
 type OrderCancelReject struct {
@@ -130,12 +134,12 @@ type BusinessMessageReject struct {
 	Text                 string `json:"Text"`
 }
 
-var businessMessageRejectTagMapping = map[string]string{
-	"45":  "RefSeqNum",
-	"372": "RefMsgType",
-	"379": "BusinessRejectRefID",
-	"380": "BusinessRejectReason",
-	"58":  "Text",
+var businessMessageRejectTagMapping = map[int]string{
+	45:  "RefSeqNum",
+	372: "RefMsgType",
+	379: "BusinessRejectRefID",
+	380: "BusinessRejectReason",
+	58:  "Text",
 }
 
 type PositionReport struct {
@@ -155,21 +159,95 @@ type PositionReport struct {
 	GuaranteedSL       string `json:"GuaranteedSL,omitempty"`
 }
 
-var positionReportTagMapping = map[string]string{
-	"710":  "PosReqID",
-	"721":  "PosMaintRptID",
-	"727":  "TotalNumPosReports",
-	"728":  "PosReqResult",
-	"55":   "Symbol",
-	"702":  "NoPositions",
-	"704":  "LongQty",
-	"705":  "ShortQty",
-	"730":  "SettlPrice",
-	"1000": "AbsoluteTP",
-	"1002": "AbsoluteSL",
-	"1004": "TrailingSL",
-	"1005": "TriggerMethodSL",
-	"1006": "GuaranteedSL",
+var positionReportTagMapping = map[int]string{
+	710:  "PosReqID",
+	721:  "PosMaintRptID",
+	727:  "TotalNumPosReports",
+	728:  "PosReqResult",
+	55:   "Symbol",
+	702:  "NoPositions",
+	704:  "LongQty",
+	705:  "ShortQty",
+	730:  "SettlPrice",
+	1000: "AbsoluteTP",
+	1002: "AbsoluteSL",
+	1004: "TrailingSL",
+	1005: "TriggerMethodSL",
+	1006: "GuaranteedSL",
+}
+
+type MarketDataSnapshot struct {
+	MDReqID      string `json:"MDReqID,omitempty"`      // Tag 262: An ID of the market data request sent previously.
+	Symbol       string `json:"Symbol"`                 // Tag 55: Instrument identificators are provided by Spotware.
+	NoMDEntries  string `json:"NoMDEntries"`            // Tag 268: The number of entries following.
+	MDEntryType  string `json:"MDEntryType,omitempty"`  // Tag 269: 0 = Bid; 1 = Offer.
+	QuoteEntryID string `json:"QuoteEntryID,omitempty"` // Tag 299: A unique identification of the quote as a part of QuoteSet.
+	MDEntryPx    string `json:"MDEntryPx,omitempty"`    // Tag 270: A price of the Market Data Entry.
+	MDEntrySize  string `json:"MDEntrySize,omitempty"`  // Tag 271: Volume of the Market Data Entry.
+	MDEntryID    string `json:"MDEntryID,omitempty"`    // Tag 278: A unique Market Data Entry identifier.
+}
+
+var marketDataSnapshotTagMapping = map[int]string{
+	262: "MDReqID",
+	55:  "Symbol",
+	268: "NoMDEntries",
+	269: "MDEntryType",
+	299: "QuoteEntryID",
+	270: "MDEntryPx",
+	271: "MDEntrySize",
+	278: "MDEntryID",
+}
+
+type MarketDataIncrementalRefresh struct {
+	MDReqID        string  `json:"MDReqID,omitempty"`     // Tag 262
+	NoMDEntries    int     `json:"NoMDEntries"`           // Tag 268
+	MDUpdateAction string  `json:"MDUpdateAction"`        // Tag 279: 0 = New; 2 = Delete.
+	MDEntryType    string  `json:"MDEntryType,omitempty"` // Tag 269
+	MDEntryID      string  `json:"MDEntryID"`             // Tag 278
+	Symbol         string  `json:"Symbol"`                // Tag 55
+	MDEntryPx      float64 `json:"MDEntryPx,omitempty"`   // Tag 270
+	MDEntrySize    float64 `json:"MDEntrySize,omitempty"` // Tag 271
+}
+
+var marketDataIncrementalRefreshTagMapping = map[int]string{
+	262: "MDReqID",        // An ID of the market data request sent previously.
+	268: "NoMDEntries",    // The number of entries following.
+	279: "MDUpdateAction", // A type of the Market Data update action.
+	269: "MDEntryType",    // 0 = Bid; 1 = Offer.
+	278: "MDEntryID",      // An ID of the Market Data Entry.
+	55:  "Symbol",         // Instrument identifiers provided by Spotware.
+	270: "MDEntryPx",      // Required only when MDUpdateAction (tag=279) = 0.
+	271: "MDEntrySize",    // Required only when MDUpdateAction (tag=279) = 0.
+}
+
+var marketDataRequestRejectTagMapping = map[int]string{
+	262: "MDReqID",        // Must refer to MDReqID of the request.
+	281: "MDReqRejReason", // 0 = Unknown symbol; 4 = Unsupported SubscriptionRequestType; 5 = Unsupported MarketDepth.
+}
+
+type MarketDataRequestReject struct {
+	MDReqID        string `json:"MDReqID"`                  // Tag 262
+	MDReqRejReason int    `json:"MDReqRejReason,omitempty"` // Tag 281: 0 = Unknown symbol; 4 = Unsupported SubscriptionRequestType; 5 = Unsupported MarketDepth.
+}
+
+var sessionRejectMessageTagMapping = map[int]string{
+	45:  "RefSeqNum",
+	58:  "Text",
+	354: "EncodedTextLen",
+	355: "EncodedText",
+	371: "RefTagID",
+	372: "RefMsgType",
+	373: "SessionRejectReason",
+}
+
+type SessionRejectMessage struct {
+	RefSeqNum           string `json:"RefSeqNum"`                     // Tag 45
+	Text                string `json:"Text,omitempty"`                // Tag 58
+	EncodedTextLen      string `json:"EncodedTextLen,omitempty"`      // Tag 354
+	EncodedText         string `json:"EncodedText,omitempty"`         // Tag 355
+	RefTagID            string `json:"RefTagID,omitempty"`            // Tag 371
+	RefMsgType          string `json:"RefMsgType,omitempty"`          // Tag 372
+	SessionRejectReason string `json:"SessionRejectReason,omitempty"` // Tag 373: Contains coded values for rejection reasons
 }
 
 type CtraderSessionMessageType int
@@ -189,6 +267,8 @@ const (
 	RequestForPositions
 	NewOrderSingle
 	SecurityListRequest
+	MarketDataRequest
+	RequestForCancelOrder
 )
 
 const (
@@ -197,6 +277,15 @@ const (
 	ResetSequence     CtraderParamIds = 141
 	Username          CtraderParamIds = 553
 	Password          CtraderParamIds = 554
+
+	//35 = V
+	MDReqID                 CtraderParamIds = 262
+	SubscriptionRequestType CtraderParamIds = 263
+	MarketDepth             CtraderParamIds = 264
+	MDUpdateType            CtraderParamIds = 265
+	NoMDEntryType           CtraderParamIds = 267
+	MDEntryType             CtraderParamIds = 269
+	NoRelatedSym            CtraderParamIds = 146
 
 	//35 = (H, D)
 	ClOrdID CtraderParamIds = 11
@@ -252,6 +341,12 @@ var MessageKeyValuePairs = map[CtraderParamIds]map[string]string{
 	Username:          {},
 	Password:          {},
 
+	SubscriptionRequestType: {"subscribe": "1", "unsubscribe": "2"},
+	MarketDepth:             {"depth": "0", "spot": "1"},
+	MDUpdateType:            {"incrementalRefresh": "1"}, // don't know what other values can go here, just grabbed from example
+	NoRelatedSym:            {},
+	MDEntryType:             {"bid": "0", "offer": "1"},
+
 	//New Order Single
 	ClOrdID:         {}, //want to use uuid4 for this
 	NOSSymbol:       {}, // determined at runtime
@@ -267,7 +362,7 @@ var MessageKeyValuePairs = map[CtraderParamIds]map[string]string{
 	//Standard Headers
 	HeaderBeginString:           {"begin": "FIX.4.4"},
 	HeaderMessageLength:         {},
-	HeaderMessageType:           {"0": "A", "1": "5", "2": "0", "3": "1", "4": "2", "5": "3", "6": "4", "7": "H", "8": "AF", "9": "AN", "10": "D", "11": "x"},
+	HeaderMessageType:           {"0": "A", "1": "5", "2": "0", "3": "1", "4": "2", "5": "3", "6": "4", "7": "H", "8": "AF", "9": "AN", "10": "D", "11": "x", "12": "V"},
 	HeaderSenderCompId:          {},
 	HeaderTargetCompId:          {"compId": "CSERVER"},
 	HeaderTargetSubId:           {"trade": "TRADE", "quote": "QUOTE"},
@@ -277,4 +372,29 @@ var MessageKeyValuePairs = map[CtraderParamIds]map[string]string{
 
 	//Trailer
 	TrailerChecksum: {},
+}
+
+type ResponseType struct {
+	Name     string
+	IsError  bool
+	IsReject bool
+}
+
+type MarketDataSubscription struct {
+	MDReqID        string // uuid
+	Action         string // subscribe, unsubscribe
+	MarketDepth    string // depth, spot
+	MDUpdateType   string // always "incrementalRefresh"
+	NoMDEntryTypes int    //always 2, will get bids and asks
+	MDEntryType    []int  //always {0,1} //both sent with 269 tag
+	NoRelatedSym   int    //always 1
+	Symbol         string // Could have multiple symbols per request
+}
+
+type Position struct {
+	PID     string
+	CopyPID string
+	Side    string
+	Symbol  string
+	AvgPx   float64
 }
