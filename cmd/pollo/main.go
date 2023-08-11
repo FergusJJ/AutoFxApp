@@ -11,12 +11,15 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/inancgumus/screen"
 )
 
 /*
-When getting position report, fix sends multiple messages, these  don't always come in at once, so aren't read into []byte on one request so for 4
-positions may get 3 the first time then 1 the second time, this will mean that all 4 are fetched eventually but may want to make sure that server
-has completely finished sending the messages first
+TODO: Reformat the screen feed logging, add coloured output for different types of message
+
+TODO: Update table properly, add fields
+TODO: Calculate the price
+
 */
 
 func main() {
@@ -43,6 +46,7 @@ func start() (func(), error) {
 	if err != nil {
 		return nil, err
 	}
+	screen.Clear()
 	go func() {
 		defer close(done)
 		app.MainLoop()

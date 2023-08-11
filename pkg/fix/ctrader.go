@@ -5,15 +5,23 @@ import (
 	"strings"
 )
 
-func (session *FxSession) CtraderLogin(user FxUser) *ErrorWithCause {
-	loginMessage, err := user.constructLogin(session)
+func (session *FxSession) CtraderLogin(user FxUser, channel CtraderMessageChannel) *ErrorWithCause {
+	var fxResponseMap []*FixResponse
+
+	loginMessage, err := user.constructLogin(session, channel)
 	if err != nil {
 		return &ErrorWithCause{
 			ErrorMessage: err.Error(),
 			ErrorCause:   ProgramError,
 		}
 	}
-	fxResponseMap, err := session.TradeClient.RoundTrip(loginMessage)
+	if channel == QUOTE {
+		fxResponseMap, err = session.PriceClient.RoundTrip(loginMessage)
+	}
+	if channel == TRADE {
+		fxResponseMap, err = session.TradeClient.RoundTrip(loginMessage)
+
+	}
 
 	if err != nil {
 		return &ErrorWithCause{
@@ -223,7 +231,7 @@ func (session *FxSession) CtraderMarketDataRequest(user FxUser, subscription Mar
 			ErrorCause:   ProgramError,
 		}
 	}
-	fxResponseMap, err := session.TradeClient.RoundTrip(marketDataRequestMessage, "flag")
+	fxResponseMap, err := session.PriceClient.RoundTrip(marketDataRequestMessage, "flag")
 	if err != nil {
 		return nil, &ErrorWithCause{
 			ErrorMessage: err.Error(),

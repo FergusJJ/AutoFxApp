@@ -25,11 +25,6 @@ type FxSession struct {
 	TradeClient             *FixClient
 }
 
-type FxResponse struct {
-	body []byte
-	err  error
-}
-
 type MessageBodyAndTag struct {
 	Tag         string            `json:"tag"`
 	MessageBody map[string]string `json:"body"`
@@ -250,9 +245,15 @@ type SessionRejectMessage struct {
 	SessionRejectReason string `json:"SessionRejectReason,omitempty"` // Tag 373: Contains coded values for rejection reasons
 }
 
+type CtraderMessageChannel int
 type CtraderSessionMessageType int
 type CtraderQualifier string
 type CtraderParamIds int
+
+const (
+	QUOTE CtraderMessageChannel = iota
+	TRADE
+)
 
 const (
 	Logon CtraderSessionMessageType = iota

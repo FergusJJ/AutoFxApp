@@ -13,11 +13,13 @@ import (
 
 // going to have to log errors here
 func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
+	app.Progam.Send(FeedUpdate("Logging in to ctrader"))
 	var messageFails int = 0
 	messageFails = 0
-	var loginFinished bool = false
-	for !loginFinished {
-		err = app.FxSession.CtraderLogin(app.FxUser)
+	var tradeLoginFinished bool = false
+	var quoteLoginFinished bool = false
+	for !quoteLoginFinished {
+		err = app.FxSession.CtraderLogin(app.FxUser, fix.QUOTE)
 		if err != nil {
 			app.Progam.Send(FeedUpdate(err.ErrorMessage))
 			switch err.ErrorCause {
@@ -37,10 +39,33 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 			}
 			continue
 		}
-		app.Progam.Send(FeedUpdate("Logged in to ctrader"))
-		loginFinished = true
+		quoteLoginFinished = true
 	}
-	// app.FxSession
+	messageFails = 0
+	for !tradeLoginFinished {
+		err = app.FxSession.CtraderLogin(app.FxUser, fix.TRADE)
+		if err != nil {
+			app.Progam.Send(FeedUpdate(err.ErrorMessage))
+			switch err.ErrorCause {
+			case fix.ProgramError:
+				return err
+			case fix.UserDataError:
+				return err
+			case fix.ConnectionError:
+				app.Progam.Send(FeedUpdate("error sending message to FIX, retrying"))
+				messageFails++
+				if messageFails > 3 {
+					return err
+				}
+
+			default:
+				log.Fatalf("%+v", err)
+			}
+			continue
+		}
+		tradeLoginFinished = true
+	}
+	app.Progam.Send(FeedUpdate("Logged in to ctrader"))
 
 	app.FxSession.LoggedIn = true
 	app.FxSession.GotSecurityList = true
@@ -50,8 +75,7 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 	// if !success {
 	// 	log.Fatalf("unsuccessful")
 	// }
-	symbol := fmt.Sprint(1)
-	app.FxSession.NewMarketDataSubscription(symbol)
+
 	// app.Progam.Send(FeedUpdate(fmt.Sprint(*newPos)))
 	//need to start function that will display open positions here:
 	for {

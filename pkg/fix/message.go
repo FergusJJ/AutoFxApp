@@ -19,14 +19,14 @@ func (user *FxUser) constructSecurityList(session *FxSession, securityRequestID 
 	securityListParams = append(securityListParams, formatMessageSlice(SecurityListRequestType, "0", true))
 	securityListBody = strings.Join(securityListParams, "|")
 	securityListBody = fmt.Sprintf("%s|", securityListBody)
-	header := user.constructHeader(securityListBody, SecurityListRequest, session, false)
+	header := user.constructHeader(securityListBody, SecurityListRequest, session, QUOTE)
 	headerWithBody := fmt.Sprintf("%s%s", header, securityListBody)
 	trailer := constructTrailer(headerWithBody)
 	message := strings.ReplaceAll(fmt.Sprintf("%s%s", headerWithBody, trailer), "|", "\u0001")
 	return message, nil
 }
 
-func (user *FxUser) constructLogin(session *FxSession) (string, error) {
+func (user *FxUser) constructLogin(session *FxSession, channel CtraderMessageChannel) (string, error) {
 	var loginBody string
 	var loginParams []string
 	compIdSlice := strings.Split(user.SenderCompID, ".")
@@ -46,7 +46,7 @@ func (user *FxUser) constructLogin(session *FxSession) (string, error) {
 	loginBody = strings.Join(loginParams, "|")
 	loginBody = fmt.Sprintf("%s|", loginBody)
 
-	header := user.constructHeader(loginBody, Logon, session, false)
+	header := user.constructHeader(loginBody, Logon, session, channel)
 	headerWithBody := fmt.Sprintf("%s%s", header, loginBody)
 	trailer := constructTrailer(headerWithBody)
 	message := strings.ReplaceAll(fmt.Sprintf("%s%s", headerWithBody, trailer), "|", "\u0001")
@@ -68,7 +68,7 @@ func (user *FxUser) constructNewOrderSingle(session *FxSession, orderData OrderD
 	newOrderSingleParams = append(newOrderSingleParams, formatMessageSlice(NOSOrdType, orderData.OrderType, false))
 	newOrderSingleBody = strings.Join(newOrderSingleParams, "|")
 	newOrderSingleBody = fmt.Sprintf("%s|", newOrderSingleBody)
-	header := user.constructHeader(newOrderSingleBody, NewOrderSingle, session, false)
+	header := user.constructHeader(newOrderSingleBody, NewOrderSingle, session, TRADE)
 	headerWithBody := fmt.Sprintf("%s%s", header, newOrderSingleBody)
 	trailer := constructTrailer(headerWithBody)
 	message := strings.ReplaceAll(fmt.Sprintf("%s%s", headerWithBody, trailer), "|", "\u0001")
@@ -95,7 +95,7 @@ func (user *FxUser) constructOrderStatusRequest(session *FxSession, clOrdId stri
 	orderStatusRequestParams = append(orderStatusRequestParams, formatMessageSlice(ClOrdID, clOrdId, true))
 	orderStatusRequestBody = strings.Join(orderStatusRequestParams, "|")
 	orderStatusRequestBody = fmt.Sprintf("%s|", orderStatusRequestBody)
-	header := user.constructHeader(orderStatusRequestBody, OrderStatusRequest, session, false)
+	header := user.constructHeader(orderStatusRequestBody, OrderStatusRequest, session, TRADE)
 	headerWithBody := fmt.Sprintf("%s%s", header, orderStatusRequestBody)
 	trailer := constructTrailer(headerWithBody)
 	message := strings.ReplaceAll(fmt.Sprintf("%s%s", headerWithBody, trailer), "|", "\u0001")
@@ -108,7 +108,7 @@ func (user *FxUser) constructPositionsRequest(session *FxSession) (string, error
 	constructPositionsRequestParams = append(constructPositionsRequestParams, formatMessageSlice(PosReqID, uuid.New().String(), true))
 	constructPositionsRequestBody = strings.Join(constructPositionsRequestParams, "|")
 	constructPositionsRequestBody = fmt.Sprintf("%s|", constructPositionsRequestBody)
-	header := user.constructHeader(constructPositionsRequestBody, RequestForPositions, session, false)
+	header := user.constructHeader(constructPositionsRequestBody, RequestForPositions, session, TRADE)
 	headerWithBody := fmt.Sprintf("%s%s", header, constructPositionsRequestBody)
 	trailer := constructTrailer(headerWithBody)
 	message := strings.ReplaceAll(fmt.Sprintf("%s%s", headerWithBody, trailer), "|", "\u0001")
@@ -118,7 +118,6 @@ func (user *FxUser) constructPositionsRequest(session *FxSession) (string, error
 func (user *FxUser) constructMarketDataRequest(session *FxSession, subscription MarketDataSubscription) (string, error) {
 	var constructMarketDataRequestBody string
 	var constructMarketDataRequestParams []string
-
 	constructMarketDataRequestParams = append(constructMarketDataRequestParams, formatMessageSlice(MDReqID, subscription.MDReqID, true))
 	constructMarketDataRequestParams = append(constructMarketDataRequestParams, formatMessageSlice(SubscriptionRequestType, subscription.Action, false))
 	constructMarketDataRequestParams = append(constructMarketDataRequestParams, formatMessageSlice(MarketDepth, subscription.MarketDepth, false))
@@ -131,7 +130,7 @@ func (user *FxUser) constructMarketDataRequest(session *FxSession, subscription 
 
 	constructMarketDataRequestBody = strings.Join(constructMarketDataRequestParams, "|")
 	constructMarketDataRequestBody = fmt.Sprintf("%s|", constructMarketDataRequestBody)
-	header := user.constructHeader(constructMarketDataRequestBody, MarketDataRequest, session, true)
+	header := user.constructHeader(constructMarketDataRequestBody, MarketDataRequest, session, QUOTE)
 	headerWithBody := fmt.Sprintf("%s%s", header, constructMarketDataRequestBody)
 	trailer := constructTrailer(headerWithBody)
 	message := strings.ReplaceAll(fmt.Sprintf("%s%s", headerWithBody, trailer), "|", "\u0001")
@@ -139,7 +138,7 @@ func (user *FxUser) constructMarketDataRequest(session *FxSession, subscription 
 	return message, nil
 }
 
-func (user *FxUser) constructHeader(bodyMessage string, messageType CtraderSessionMessageType, session *FxSession, quote bool) string {
+func (user *FxUser) constructHeader(bodyMessage string, messageType CtraderSessionMessageType, session *FxSession, channel CtraderMessageChannel) string {
 	var messageTypeStr = fmt.Sprintf("%d", messageType)
 	var header string
 	var headerParams []string
@@ -149,12 +148,11 @@ func (user *FxUser) constructHeader(bodyMessage string, messageType CtraderSessi
 	headerParams = append(headerParams, formatMessageSlice(HeaderMessageType, messageTypeStr, false))
 	headerParams = append(headerParams, formatMessageSlice(HeaderSenderCompId, user.SenderCompID, true))
 	headerParams = append(headerParams, formatMessageSlice(HeaderTargetCompId, user.TargetCompID, true))
-	if !quote {
-		headerParams = append(headerParams, formatMessageSlice(HeaderTargetSubId, "trade", false))
-		headerParams = append(headerParams, formatMessageSlice(HeaderSenderSubId, user.SenderSubID, true))
-	} else {
+	if channel == QUOTE {
 		headerParams = append(headerParams, formatMessageSlice(HeaderTargetSubId, "quote", false))
-		headerParams = append(headerParams, formatMessageSlice(HeaderSenderSubId, "QUOTE", true))
+	}
+	if channel == TRADE {
+		headerParams = append(headerParams, formatMessageSlice(HeaderTargetSubId, "trade", false))
 	}
 	headerParams = append(headerParams, formatMessageSlice(HeaderMessageSequenceNumber, messageSequenceString, true))
 	headerParams = append(headerParams, formatMessageSlice(HeaderMessageTimestamp, messageTs, true))
@@ -292,7 +290,21 @@ func parseFixResponse(resp *FixResponse, reqType CtraderSessionMessageType) (int
 				log.Fatal(err)
 			}
 			return marketDataRequestReject, fmt.Errorf("market data request reject")
-
+		case "j":
+			var businessMessageRejectMapping = map[string]string{}
+			var businessMessageReject BusinessMessageReject
+			for tag, val := range resp.Body {
+				businessMessageRejectMapping[businessMessageRejectTagMapping[tag]] = val
+			}
+			jsonData, err := json.Marshal(businessMessageRejectMapping)
+			if err != nil {
+				log.Fatal(err)
+			}
+			err = json.Unmarshal(jsonData, &businessMessageReject)
+			if err != nil {
+				log.Fatal(err)
+			}
+			return businessMessageReject, fmt.Errorf("business reject: %s", businessMessageReject.Text)
 		default:
 			log.Fatalf("unhandled resp.MsgType %s. reqType: %d", resp.MsgType, reqType)
 		}
