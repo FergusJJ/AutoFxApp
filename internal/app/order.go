@@ -33,9 +33,9 @@ func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (bool, *fix.
 		case fix.ProgramError:
 			log.Fatalf("program error: %s", fxErr.ErrorMessage)
 		case fix.ConnectionError:
-			app.Progam.Send(FeedUpdate(fmt.Sprintf("client error whilst attempting to open position: %s", fxErr.ErrorMessage)))
+			app.Program.SendColor(fmt.Sprintf("client error whilst attempting to open position: %s", fxErr.ErrorMessage), "red")
 		case fix.MarketError:
-			app.Progam.Send(FeedUpdate(fmt.Sprintf(fxErr.ErrorMessage)))
+			app.Program.SendColor(fmt.Sprintf(fxErr.ErrorMessage), "red")
 		}
 		return false, nil
 	}
@@ -44,21 +44,21 @@ func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (bool, *fix.
 	for {
 		switch executionReport.ExecType {
 		case "0":
-			app.Progam.Send(FeedUpdate("order in progress..."))
+			app.Program.SendColor("order in progress...", "yellow")
 			time.Sleep(pollTimeout)
 		case "4":
-			app.Progam.Send(FeedUpdate("order was cancelled"))
+			app.Program.SendColor("order was cancelled", "red")
 			return false, nil
 		case "8":
-			app.Progam.Send(FeedUpdate(fmt.Sprintf("order rejected: %s", executionReport.Text)))
+			app.Program.SendColor(fmt.Sprintf("order rejected: %s", executionReport.Text), "red")
 			return false, nil
 		case "C":
-			app.Progam.Send(FeedUpdate("order expired"))
+			app.Program.SendColor("order expired", "red")
 			return false, nil
 		case "F":
-			app.Progam.Send(FeedUpdate("order was executed"))
+			app.Program.SendColor("order was executed", "green")
 			if executionReport.OrdStatus == "1" {
-				app.Progam.Send(FeedUpdate("order could only be partially filled"))
+				app.Program.SendColor("order could only be partially filled", "yellow")
 			}
 			avgPx, err := strconv.ParseFloat(executionReport.AvgPx, 64)
 			if err != nil {
@@ -77,7 +77,7 @@ func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (bool, *fix.
 		//this shouldn't happen yet
 		//if/when support added, will just need to update the volume of the position i think
 		case "5":
-			app.Progam.Send(FeedUpdate("order was replaced"))
+			app.Program.SendColor("order was replaced", "yellow")
 			return false, nil
 			//update positions
 		case "I":
@@ -90,9 +90,9 @@ func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (bool, *fix.
 			case fix.ProgramError:
 				log.Fatalf("program error: %s", fxErr.ErrorMessage)
 			case fix.ConnectionError:
-				app.Progam.Send(FeedUpdate(fmt.Sprintf("client error whilst polling order status: %s", fxErr.ErrorMessage)))
+				app.Program.SendColor(fmt.Sprintf("client error whilst polling order status: %s", fxErr.ErrorMessage), "red")
 			case fix.MarketError:
-				app.Progam.Send(FeedUpdate(fmt.Sprintf(fxErr.ErrorMessage)))
+				app.Program.SendColor(fmt.Sprintf(fxErr.ErrorMessage), "red")
 			}
 			return false, nil
 		}
@@ -135,9 +135,9 @@ func (app *FxApp) FetchPositions() ([]string, *fix.ErrorWithCause) {
 		positionReportString += fmt.Sprintf("Position id: %s | Volume: %s | Symbol: %s \n ", v.PosMaintRptID, vol, v.Symbol)
 	}
 	if positionReportString == "" {
-		app.Progam.Send("No updates")
+		app.Program.SendColor("No updates", "yellow")
 	}
-	app.Progam.Send(FeedUpdate(positionReportString))
+	app.Program.SendColor(positionReportString, "yellow")
 	// fxErr = app.FxSession.CtraderMarketDataRequest(app.FxUser)
 	// if fxErr != nil {
 	// 	return []string{}, fxErr

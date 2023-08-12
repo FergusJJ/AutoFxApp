@@ -365,7 +365,7 @@ func parseFixResponse(resp *FixResponse, reqType CtraderSessionMessageType) (int
 			log.Fatalf("unhandled resp.MsgType %s. reqType: %d", resp.MsgType, reqType)
 		}
 	default:
-		log.Fatalf("no case specified for reqType: %s\nfix response:\n%+v", reqType, resp)
+		log.Fatalf("no case specified for reqType: %+v\nfix response:\n%+v", reqType, resp)
 	}
 	return nil, nil
 }

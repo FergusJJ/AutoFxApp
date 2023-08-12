@@ -78,7 +78,7 @@ func (m Model) View() string {
 		s += fmt.Sprintf("%s\n", msg)
 	}
 
-	s += "\nPress q to quit.\n"
+	s += lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render("\nPress q to quit.\n")
 	return s
 }
 

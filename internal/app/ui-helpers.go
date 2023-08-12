@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
@@ -16,6 +17,13 @@ type (
 	QuitApp              struct{}
 	FeedUpdate           string
 	PositionMessageSlice []PositionMessage
+)
+
+var (
+	textRed    = lipgloss.NewStyle().Foreground(lipgloss.Color("#E88388"))
+	textGreen  = lipgloss.NewStyle().Foreground(lipgloss.Color("#A8CC8C"))
+	textYellow = lipgloss.NewStyle().Foreground(lipgloss.Color("#DBAB79"))
+	textFaint  = lipgloss.NewStyle().Faint(true)
 )
 
 func getHeader(name string) string {
@@ -57,4 +65,22 @@ func initialiseTable() table.Model {
 		Bold(false)
 	t.SetStyles(style)
 	return t
+}
+
+func (p *AppProgram) SendColor(message, color string) {
+	timestamp := time.Now().Format("15:04:05")
+	timestamp = textFaint.Render(timestamp)
+
+	switch color {
+	case "green":
+		message = textGreen.Render(message)
+	case "red":
+		message = textRed.Render(message)
+	case "yellow":
+		message = textYellow.Render(message)
+	}
+
+	message = fmt.Sprintf("%s - %s", timestamp, message)
+
+	p.Program.Send(FeedUpdate(message))
 }

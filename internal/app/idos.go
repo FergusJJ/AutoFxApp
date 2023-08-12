@@ -13,8 +13,12 @@ type FxApp struct {
 	FxUser             fix.FxUser
 	ApiSession         api.ApiSession //done
 	LicenseKey         string         `json:"licenseKey"` //
-	Progam             *tea.Program
+	Program            AppProgram
 	UiPositionsDataMap map[string]uiPositionData
+}
+
+type AppProgram struct {
+	Program *tea.Program
 }
 
 type uiPositionData struct {

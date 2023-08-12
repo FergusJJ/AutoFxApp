@@ -47,12 +47,13 @@ func start() (func(), error) {
 		return nil, err
 	}
 	screen.Clear()
+	screen.MoveTopLeft()
 	go func() {
 		defer close(done)
 		app.MainLoop()
 	}()
 	errChan <- func() error {
-		_, err := app.Progam.Run()
+		_, err := app.Program.Program.Run()
 		if err != nil {
 			return err
 		}
@@ -82,7 +83,8 @@ func start() (func(), error) {
 func initialiseProgram() (*app.FxApp, func(), error) {
 
 	App := &app.FxApp{}
-	App.Progam = tea.NewProgram(app.NewModel("fergus"))
+
+	App.Program.Program = tea.NewProgram(app.NewModel("fergus"))
 	//FxUser & Lisence Key Start
 	fxUser, err := config.LoadDataFromJson()
 	if err != nil {

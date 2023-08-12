@@ -13,7 +13,7 @@ import (
 
 // going to have to log errors here
 func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
-	app.Progam.Send(FeedUpdate("Logging in to ctrader"))
+	app.Program.SendColor("Logging in to ctrader", "yellow")
 	var messageFails int = 0
 	messageFails = 0
 	var tradeLoginFinished bool = false
@@ -21,14 +21,14 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 	for !quoteLoginFinished {
 		err = app.FxSession.CtraderLogin(app.FxUser, fix.QUOTE)
 		if err != nil {
-			app.Progam.Send(FeedUpdate(err.ErrorMessage))
+			app.Program.SendColor(err.ErrorMessage, "red")
 			switch err.ErrorCause {
 			case fix.ProgramError:
 				return err
 			case fix.UserDataError:
 				return err
 			case fix.ConnectionError:
-				app.Progam.Send(FeedUpdate("error sending message to FIX, retrying"))
+				app.Program.SendColor("error sending message to FIX, retrying", "red")
 				messageFails++
 				if messageFails > 3 {
 					return err
@@ -45,14 +45,14 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 	for !tradeLoginFinished {
 		err = app.FxSession.CtraderLogin(app.FxUser, fix.TRADE)
 		if err != nil {
-			app.Progam.Send(FeedUpdate(err.ErrorMessage))
+			app.Program.SendColor(err.ErrorMessage, "yellow")
 			switch err.ErrorCause {
 			case fix.ProgramError:
 				return err
 			case fix.UserDataError:
 				return err
 			case fix.ConnectionError:
-				app.Progam.Send(FeedUpdate("error sending message to FIX, retrying"))
+				app.Program.SendColor("error sending message to FIX, retrying", "yellow")
 				messageFails++
 				if messageFails > 3 {
 					return err
@@ -65,7 +65,7 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 		}
 		tradeLoginFinished = true
 	}
-	app.Progam.Send(FeedUpdate("Logged in to ctrader"))
+	app.Program.SendColor("Logged in to ctrader", "green")
 
 	app.FxSession.LoggedIn = true
 	app.FxSession.GotSecurityList = true
@@ -76,7 +76,7 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 	// 	log.Fatalf("unsuccessful")
 	// }
 
-	// app.Progam.Send(FeedUpdate(fmt.Sprint(*newPos)))
+	// app.Program.SendColor(fmt.Sprint(*newPos)))
 	//need to start function that will display open positions here:
 	for {
 		select {
@@ -98,11 +98,11 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 				symbol := fmt.Sprint(newMessage.SymbolID)
 				app.FxSession.NewMarketDataSubscription(symbol)
 			case "CLOSE":
-				app.Progam.Send(FeedUpdate(fmt.Sprintf("Got CLOSE:%+v\n", newMessage)))
+				app.Program.SendColor(fmt.Sprintf("Got CLOSE:%+v\n", newMessage), "green")
 
 				// pid, err := app.ClosePosition(newMessage)
 				// if err != nil {
-				// 	app.Progam.Send(FeedUpdate(fmt.Sprint("close position error: ", err)))
+				// 	app.Program.SendColor(fmt.Sprint("close position error: ", err)))
 				// 	continue
 				// }
 
@@ -117,12 +117,12 @@ func (app *FxApp) MainLoop() (err *fix.ErrorWithCause) {
 			}
 		default:
 			//send marketDataRequests, and then update ui
-			app.Progam.Send(FeedUpdate("updating position data"))
+			app.Program.SendColor("updating position data", "yellow")
 			var marketDataSnapshots []fix.MarketDataSnapshot
 			for _, subscription := range app.FxSession.MarketDataSubscriptions {
 				marketDataSnapshot, err := app.FxSession.CtraderMarketDataRequest(app.FxUser, *subscription)
 				if err != nil {
-					app.Progam.Send(FeedUpdate(fmt.Sprintf("error getting symbol data: %s", err.ErrorMessage)))
+					app.Program.SendColor(fmt.Sprintf("error getting symbol data: %s", err.ErrorMessage), "red")
 					continue
 				}
 				marketDataSnapshots = append(marketDataSnapshots, marketDataSnapshot...)
@@ -139,7 +139,7 @@ func (app *FxApp) CloseExistingConnections() {
 		//this will never panic, so logging error is fine
 		err := app.FxSession.TradeClient.Close()
 		if err != nil {
-			app.Progam.Send(FeedUpdate(fmt.Sprintf("error closing connection to FIX: %s", err.Error())))
+			app.Program.SendColor(fmt.Sprintf("error closing connection to FIX: %s", err.Error()), "red")
 		}
 		app.FxSession.TradeClient = nil
 	}
@@ -147,7 +147,7 @@ func (app *FxApp) CloseExistingConnections() {
 	if app.FxSession.PriceClient != nil {
 		err := app.FxSession.PriceClient.Close()
 		if err != nil {
-			app.Progam.Send(FeedUpdate(fmt.Sprintf("error closing connection to FIX: %s", err.Error())))
+			app.Program.SendColor(fmt.Sprintf("error closing connection to FIX: %s", err.Error()), "red")
 		}
 		app.FxSession.PriceClient = nil
 
@@ -159,12 +159,12 @@ func (app *FxApp) CloseExistingConnections() {
 			websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
 		)
 		if err != nil {
-			app.Progam.Send(FeedUpdate(fmt.Sprintf("error writing close to API: %s", err.Error())))
+			app.Program.SendColor(fmt.Sprintf("error writing close to API: %s", err.Error()), "red")
 		}
 		//this will never panic, so logging error is fine
 		err = app.ApiSession.Client.Connection.Close()
 		if err != nil {
-			app.Progam.Send(FeedUpdate(fmt.Sprintf("error closing connection to API: %s", err.Error())))
+			app.Program.SendColor(fmt.Sprintf("error closing connection to API: %s", err.Error()), "red")
 		}
 		app.ApiSession.Client.Connection = nil
 	}
