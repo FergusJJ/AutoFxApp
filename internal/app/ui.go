@@ -8,9 +8,17 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-var tableStyling = lipgloss.NewStyle().
+var appPadding = lipgloss.NewStyle().Padding(2, 1)
+
+var titleStyle = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("#FFFDF5")).
+	Background(lipgloss.Color("#25A065")).
+	Padding(0, 1)
+
+var tableStyle = lipgloss.NewStyle().
 	BorderStyle(lipgloss.RoundedBorder()).
-	BorderForeground(lipgloss.Color("240"))
+	BorderForeground(lipgloss.Color("240")).
+	Padding(0, 1)
 
 type Model struct {
 	headerMsg      string
@@ -53,6 +61,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "q" {
 			return m, tea.Quit
 		}
+
 	default:
 	}
 	return m, nil
@@ -61,7 +70,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	//initialise view with header
 
-	s := m.headerMsg
+	// s := m.headerMsg
+	s := titleStyle.Render(m.headerMsg)
 	s += "\n"
 
 	//append the table on to the message
@@ -70,7 +80,7 @@ func (m Model) View() string {
 		rows = append(rows, []string{v.ID, v.Direction})
 	}
 	m.table.SetRows(rows)
-	s += tableStyling.Render(m.table.View())
+	s += tableStyle.Render(m.table.View())
 	s += "\n"
 
 	//append the feed messages
@@ -79,7 +89,7 @@ func (m Model) View() string {
 	}
 
 	s += lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render("\nPress q to quit.\n")
-	return s
+	return appPadding.Render(s)
 }
 
 func (m *Model) updateMessages(messages ...FeedUpdate) {

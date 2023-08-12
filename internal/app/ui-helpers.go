@@ -27,13 +27,7 @@ var (
 )
 
 func getHeader(name string) string {
-
-	var headerStyle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#FAFAFA")).
-		Background(lipgloss.Color("#7D56F4"))
-
-	header := headerStyle.Render(fmt.Sprintf("Welcome %s | CopyFX - Version 0.1", name))
+	header := titleStyle.Render(fmt.Sprintf("Welcome %s | CopyFX - Version 0.1", name))
 	return header
 }
 
@@ -79,7 +73,6 @@ func (p *AppProgram) SendColor(message, color string) {
 	case "yellow":
 		message = textYellow.Render(message)
 	}
-
 	message = fmt.Sprintf("%s - %s", timestamp, message)
 
 	p.Program.Send(FeedUpdate(message))
