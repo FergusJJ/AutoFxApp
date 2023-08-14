@@ -13,13 +13,6 @@ import (
 // might want to change from OrderType market, to Limit, user may specify limit
 func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (bool, *fix.Position) {
 	//get oid
-	if copyPosition == nil {
-		copyPosition = &api.ApiMonitorMessage{
-			SymbolID:  1,
-			Volume:    2000,
-			Direction: "sell",
-		}
-	}
 	orderData := fix.OrderData{
 		Symbol:    fmt.Sprint(copyPosition.SymbolID),
 		Volume:    float64(copyPosition.Volume),
@@ -64,12 +57,18 @@ func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (bool, *fix.
 			if err != nil {
 				log.Fatalf("Error parsing float from :%s", executionReport.AvgPx)
 			}
+			volumeInt, err := strconv.ParseInt(executionReport.CumQty, 10, 64)
+			if err != nil {
+				log.Fatalf("Error parsing int from :%s", executionReport.CumQty)
+			}
 			positionData := &fix.Position{
-				PID:     executionReport.PosMaintRptID,
-				CopyPID: copyPosition.CopyPID,
-				Side:    copyPosition.Direction,
-				Symbol:  fmt.Sprint(copyPosition.SymbolID),
-				AvgPx:   avgPx,
+				PID:       executionReport.PosMaintRptID,
+				CopyPID:   copyPosition.CopyPID,
+				Side:      copyPosition.Direction,
+				Symbol:    fmt.Sprint(copyPosition.SymbolID),
+				AvgPx:     avgPx,
+				Volume:    volumeInt,
+				Timestamp: executionReport.TransactTime,
 			}
 
 			return true, positionData

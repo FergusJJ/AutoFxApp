@@ -8,15 +8,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-type PositionMessage struct {
-	ID        string
-	Direction string
-}
-
 type (
 	QuitApp              struct{}
 	FeedUpdate           string
-	PositionMessageSlice []PositionMessage
+	PositionMessageSlice map[string]uiPositionData
+	tickMsg              int
 )
 
 var (
@@ -31,17 +27,32 @@ func getHeader(name string) string {
 	return header
 }
 
-func initialiseTable() table.Model {
+func initialiseTable(rows ...table.Row) table.Model {
 
 	var colStyling = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#0000ff"))
-	thisPID := colStyling.Render("PID")
+		Bold(true)
+
+	userPID := colStyling.Render("PID")
+	copyPID := colStyling.Render("COPY PID")
+	symbol := colStyling.Render("SYMBOL")
+	timestamp := colStyling.Render("OPENED")
+	side := colStyling.Render("SIDE")
+	volume := colStyling.Render("VOLUME")
+	grossProfit := colStyling.Render("GROSS")
+	entryPrice := colStyling.Render("ENTRY")
+	currentPrice := colStyling.Render("CURRENT PRICE")
 	cols := []table.Column{
-		{Title: thisPID, Width: 12},
-		{Title: "DIRECTION", Width: 10},
+		{Title: userPID, Width: 15},
+		{Title: copyPID, Width: 15},
+		{Title: timestamp, Width: 15},
+		{Title: symbol, Width: 15},
+		{Title: volume, Width: 15},
+		{Title: side, Width: 15},
+		{Title: entryPrice, Width: 15},
+		{Title: currentPrice, Width: 15},
+		{Title: grossProfit, Width: 15},
 	}
-	rows := []table.Row{}
+	// rows := []table.Row{}
 	tableOpts := []table.Option{
 		table.WithFocused(true),
 		table.WithHeight(15),
@@ -51,13 +62,18 @@ func initialiseTable() table.Model {
 	t := table.New(
 		tableOpts...,
 	)
-	style := table.DefaultStyles()
-	style.Header.
+	s := table.DefaultStyles()
+	s.Header = s.Header.
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color("240")).
 		BorderBottom(true).
 		Bold(false)
-	t.SetStyles(style)
+	// s.Selected = s.Selected.
+	// 	Foreground(lipgloss.Color("229")).
+	// 	Background(lipgloss.Color("57")).
+	// 	Bold(false)
+	t.SetStyles(s)
+
 	return t
 }
 
@@ -77,3 +93,7 @@ func (p *AppProgram) SendColor(message, color string) {
 
 	p.Program.Send(FeedUpdate(message))
 }
+
+/*
+error getting marketData: business reject: ALREADY_SUBSCRIBED:An attempt to subscribe twice
+*/

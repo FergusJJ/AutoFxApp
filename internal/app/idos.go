@@ -22,10 +22,15 @@ type AppProgram struct {
 }
 
 type uiPositionData struct {
-	positionId  string
-	volume      string
-	grossProfit string
-	netProfit   string
+	entryPrice     string
+	currentPrice   string
+	copyPositionId string
+	positionId     string
+	volume         string
+	grossProfit    string
+	timestamp      string
+	side           string
+	symbol         string
 }
 
 type orderInProgressData struct {

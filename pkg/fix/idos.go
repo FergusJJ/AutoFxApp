@@ -1,6 +1,8 @@
 package fix
 
-import "sync"
+import (
+	"sync"
+)
 
 const TradePort = 5212
 const PricePort = 5211
@@ -14,15 +16,16 @@ type FxUser struct {
 }
 
 type FxSession struct {
-	mtx                     sync.Mutex
-	GotSecurityList         bool
-	LoggedIn                bool
-	SecListPairs            map[string]string
-	MarketDataSubscriptions map[string]*MarketDataSubscription //key should be symbolID
-	Positions               map[string]Position                //key should be copy position id
-	MessageSequenceNumber   int
-	PriceClient             *FixClient
-	TradeClient             *FixClient
+	mtx                        sync.Mutex
+	GotSecurityList            bool
+	LoggedIn                   bool
+	SecListPairs               map[string]string
+	MarketDataSubscriptions    map[string]*MarketDataSubscription //key should be symbolID
+	Positions                  map[string]Position                //key should be copy position id
+	PriceMessageSequenceNumber int
+	TradeMessageSequenceNumber int
+	PriceClient                *FixClient
+	TradeClient                *FixClient
 }
 
 type MessageBodyAndTag struct {
@@ -393,9 +396,11 @@ type MarketDataSubscription struct {
 }
 
 type Position struct {
-	PID     string
-	CopyPID string
-	Side    string
-	Symbol  string
-	AvgPx   float64
+	PID       string
+	CopyPID   string
+	Side      string
+	Symbol    string
+	AvgPx     float64
+	Volume    int64
+	Timestamp string
 }

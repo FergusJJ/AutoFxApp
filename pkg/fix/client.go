@@ -49,7 +49,7 @@ func NewTCPClient(hostName string, port int, timeout time.Duration, readBufferSi
 	}
 }
 
-func (c *FixClient) RoundTrip(message string, flag ...string) ([]*FixResponse, error) {
+func (c *FixClient) RoundTrip(message string) ([]*FixResponse, error) {
 	message = strings.ReplaceAll(message, "|", "\u0001")
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -67,9 +67,7 @@ func (c *FixClient) RoundTrip(message string, flag ...string) ([]*FixResponse, e
 
 	var responses []*FixResponse
 	for _, msg := range messages {
-		if len(flag) == 1 {
-			fmt.Println(string(msg))
-		}
+
 		respString := string(msg)
 		if !validateChecksum(respString) {
 			return nil, errors.New("invalid checksum")
@@ -139,6 +137,7 @@ func (c *FixClient) Receive() ([][]byte, error) {
 				if endIndex < len(data) && string(data[endIndex]) == "\u0001" {
 					messages = append(messages, data[startIndex:endIndex+1])
 					startIndex = endIndex + 1
+
 				} else {
 					break
 				}

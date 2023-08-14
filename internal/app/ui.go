@@ -12,7 +12,7 @@ var appPadding = lipgloss.NewStyle().Padding(2, 1)
 
 var titleStyle = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("#FFFDF5")).
-	Background(lipgloss.Color("#25A065")).
+	// Background(lipgloss.Color("#25A065")).
 	Padding(0, 1)
 
 var tableStyle = lipgloss.NewStyle().
@@ -23,7 +23,7 @@ var tableStyle = lipgloss.NewStyle().
 type Model struct {
 	headerMsg      string
 	backgroundFeed []FeedUpdate
-	positions      []PositionMessage
+	positions      []uiPositionData
 	table          table.Model
 }
 
@@ -34,21 +34,24 @@ func NewModel(name string) Model {
 	m := Model{
 		headerMsg:      getHeader(name),
 		backgroundFeed: make([]FeedUpdate, 0),
-		positions:      make([]PositionMessage, 0),
+		positions:      make([]uiPositionData, 0),
 		table:          initialiseTable(),
 	}
 	return m
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-
+	//maybe need an event listener for scrren resize which will re-init the table
 	switch msg := msg.(type) {
 	case PositionMessageSlice:
 		// return m, tea.Quit
-		tmpPositions := []PositionMessage{}
-		for _, v := range msg {
+		tmpPositions := []uiPositionData{}
+		for copyPID, v := range msg {
+			v.copyPositionId = copyPID
 			tmpPositions = append(tmpPositions, v)
+
 		}
+
 		m.positions = tmpPositions
 		return m, nil
 	case FeedUpdate:
@@ -61,7 +64,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "q" {
 			return m, tea.Quit
 		}
+	// case tickMsg:
+	// 	w, h, _ := term.GetSize(int(os.Stdout.Fd()))
+	// 	if w != m.w || h != m.h {
+	// 		m.updateSize(w, h)
+	// 	}
+	// 	return m, tea.Batch(tick, func() tea.Msg { return tea.WindowSizeMsg{Width: w, Height: h} })
 
+	case tea.QuitMsg:
+		return m, tea.Quit
 	default:
 	}
 	return m, nil
@@ -69,7 +80,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string {
 	//initialise view with header
-
 	// s := m.headerMsg
 	s := titleStyle.Render(m.headerMsg)
 	s += "\n"
@@ -77,17 +87,20 @@ func (m Model) View() string {
 	//append the table on to the message
 	rows := []table.Row{}
 	for _, v := range m.positions {
-		rows = append(rows, []string{v.ID, v.Direction})
+		rows = append(rows, []string{v.positionId, v.copyPositionId, v.timestamp, v.symbol, v.volume, v.side, v.entryPrice, v.currentPrice, v.grossProfit})
+
 	}
-	m.table.SetRows(rows)
+	m.table = initialiseTable(rows...)
+	// m.table.SetRows(rows)
 	s += tableStyle.Render(m.table.View())
 	s += "\n"
 
 	//append the feed messages
+	tmp := ""
 	for _, msg := range m.backgroundFeed {
-		s += fmt.Sprintf("%s\n", msg)
+		tmp += fmt.Sprintf("%s\n", msg)
 	}
-
+	s += tmp
 	s += lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render("\nPress q to quit.\n")
 	return appPadding.Render(s)
 }
@@ -98,7 +111,7 @@ func (m *Model) updateMessages(messages ...FeedUpdate) {
 	}
 	//if amount of messages < 5; then update messages, if length exceeds 5, then remove oldest message
 	for _, msg := range messages {
-		if len(m.backgroundFeed) < 5 {
+		if len(m.backgroundFeed) < 10 {
 			m.backgroundFeed = append(m.backgroundFeed, msg)
 		} else {
 			tmpFeed := m.backgroundFeed[1:]

@@ -1,6 +1,7 @@
 package fix
 
 import (
+	"fmt"
 	"log"
 	"strings"
 )
@@ -12,11 +13,12 @@ func (session *FxSession) CtraderLogin(user FxUser, channel CtraderMessageChanne
 	if err != nil {
 		return &ErrorWithCause{
 			ErrorMessage: err.Error(),
-			ErrorCause:   ProgramError,
+			ErrorCause:   UserDataError,
 		}
 	}
 	if channel == QUOTE {
 		fxResponseMap, err = session.PriceClient.RoundTrip(loginMessage)
+
 	}
 	if channel == TRADE {
 		fxResponseMap, err = session.TradeClient.RoundTrip(loginMessage)
@@ -26,13 +28,20 @@ func (session *FxSession) CtraderLogin(user FxUser, channel CtraderMessageChanne
 	if err != nil {
 		return &ErrorWithCause{
 			ErrorMessage: err.Error(),
-			ErrorCause:   ConnectionError,
+			ErrorCause:   CtraderConnectionError,
 		}
 	}
-	session.MessageSequenceNumber++
+	if channel == QUOTE {
+		session.PriceMessageSequenceNumber++
+	} else {
+		session.TradeMessageSequenceNumber++
+	}
 
 	if len(fxResponseMap) != 1 {
-		log.Fatal(fxResponseMap)
+		return &ErrorWithCause{
+			ErrorMessage: fmt.Sprintf("ctrader login, unexpected response length: %d", len(fxResponseMap)),
+			ErrorCause:   ProgramError,
+		}
 	}
 	success_, err := parseFixResponse(fxResponseMap[0], Logon)
 	if err != nil {
@@ -112,10 +121,10 @@ func (session *FxSession) CtraderNewOrderSingle(user FxUser, orderData OrderData
 	if err != nil {
 		return ExecutionReport{}, &ErrorWithCause{
 			ErrorMessage: err.Error(),
-			ErrorCause:   ConnectionError,
+			ErrorCause:   CtraderConnectionError,
 		}
 	}
-	session.MessageSequenceNumber++
+	session.TradeMessageSequenceNumber++
 	if len(fxResponseMap) != 1 {
 		log.Fatalf("resp map len %d: %+v", len(fxResponseMap), fxResponseMap)
 	}
@@ -159,10 +168,10 @@ func (session *FxSession) CtraderOrderStatus(user FxUser, clOrdID string) (Execu
 	if err != nil {
 		return ExecutionReport{}, &ErrorWithCause{
 			ErrorMessage: err.Error(),
-			ErrorCause:   ConnectionError,
+			ErrorCause:   CtraderConnectionError,
 		}
 	}
-	session.MessageSequenceNumber++
+	session.TradeMessageSequenceNumber++
 	if len(fxResponseMap) != 1 {
 		log.Fatalf("resp map len %d: %+v", len(fxResponseMap), fxResponseMap)
 	}
@@ -201,10 +210,10 @@ func (session *FxSession) CtraderRequestForPositions(user FxUser) ([]PositionRep
 	if err != nil {
 		return nil, &ErrorWithCause{
 			ErrorMessage: err.Error(),
-			ErrorCause:   ConnectionError,
+			ErrorCause:   CtraderConnectionError,
 		}
 	}
-	session.MessageSequenceNumber++
+	session.TradeMessageSequenceNumber++
 	var positions = make([]PositionReport, 0)
 	for _, message := range fxResponseMap {
 		//does not currently return an error so not gonna have proper handling rn
@@ -231,20 +240,27 @@ func (session *FxSession) CtraderMarketDataRequest(user FxUser, subscription Mar
 			ErrorCause:   ProgramError,
 		}
 	}
-	fxResponseMap, err := session.PriceClient.RoundTrip(marketDataRequestMessage, "flag")
+	fxResponseMap, err := session.PriceClient.RoundTrip(marketDataRequestMessage)
 	if err != nil {
 		return nil, &ErrorWithCause{
 			ErrorMessage: err.Error(),
-			ErrorCause:   ConnectionError,
+			ErrorCause:   CtraderConnectionError,
 		}
 	}
-	session.MessageSequenceNumber++
+	session.PriceMessageSequenceNumber++
 	var data = make([]MarketDataSnapshot, 0)
 	for _, message := range fxResponseMap {
 		//does not currently return an error so not gonna have proper handling rn
 		fxRes, err := parseFixResponse(message, MarketDataRequest)
 		if err != nil {
-			log.Fatalf("error getting marketData: %+v", err)
+			_, ok := fxRes.(BusinessMessageReject)
+			if !ok {
+				log.Fatalf("error getting marketData: %+v", err)
+			}
+			return data, &ErrorWithCause{
+				ErrorCause:   MarketError,
+				ErrorMessage: err.Error(),
+			}
 		}
 		marketDataSnapshot, ok := fxRes.(MarketDataSnapshot)
 		if !ok {

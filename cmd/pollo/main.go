@@ -15,8 +15,6 @@ import (
 )
 
 /*
-TODO: Reformat the screen feed logging, add coloured output for different types of message
-
 TODO: Update table properly, add fields
 TODO: Calculate the price
 
@@ -40,7 +38,6 @@ func main() {
 
 func start() (func(), error) {
 	done := make(chan struct{})
-	backendErrChan := make(chan error, 1)
 	errChan := make(chan error, 1)
 	app, cleanup, err := initialiseProgram()
 	if err != nil {
@@ -51,6 +48,7 @@ func start() (func(), error) {
 	go func() {
 		defer close(done)
 		app.MainLoop()
+		app.Program.Program.Send(tea.QuitMsg{})
 	}()
 	errChan <- func() error {
 		_, err := app.Program.Program.Run()
@@ -65,13 +63,7 @@ func start() (func(), error) {
 			log.Println("ui error:", err)
 			return cleanup, err
 		}
-	case err := <-backendErrChan:
-		if err != nil {
-			if err != nil {
-				log.Println("backend error:", err)
-				return cleanup, err
-			}
-		}
+
 	case <-done:
 	}
 	return func() {
@@ -84,7 +76,7 @@ func initialiseProgram() (*app.FxApp, func(), error) {
 
 	App := &app.FxApp{}
 
-	App.Program.Program = tea.NewProgram(app.NewModel("fergus"))
+	App.Program.Program = tea.NewProgram(app.NewModel("fergus"), tea.WithAltScreen())
 	//FxUser & Lisence Key Start
 	fxUser, err := config.LoadDataFromJson()
 	if err != nil {
@@ -123,7 +115,8 @@ func initialiseProgram() (*app.FxApp, func(), error) {
 
 	App.FxSession.TradeClient = fxTradeClient
 	App.FxSession.PriceClient = fxPriceClient
-	App.FxSession.MessageSequenceNumber = 1
+	App.FxSession.TradeMessageSequenceNumber = 1
+	App.FxSession.PriceMessageSequenceNumber = 1
 	App.FxSession.LoggedIn = false
 	log.Println("connected to fix api")
 	//FxSesion Done
@@ -136,8 +129,18 @@ func initialiseProgram() (*app.FxApp, func(), error) {
 			log.Println("closed existing connections")
 		}, err
 	}
+
 	log.Println("license verified")
 	App.ApiSession.Cid = cid
+	App.ApiSession.LicenseKey = App.LicenseKey
+	err = App.ApiSession.FetchApiAuth()
+	if err != nil {
+		return nil, func() {
+			App.CloseExistingConnections()
+			log.Println("closed existing connections")
+		}, err
+	}
+	log.Println("session authorised")
 
 	apiConn, err := api.CreateApiConnection(App.ApiSession.Cid, pools)
 	if err != nil {

@@ -134,7 +134,7 @@ func (user *FxUser) constructMarketDataRequest(session *FxSession, subscription 
 	headerWithBody := fmt.Sprintf("%s%s", header, constructMarketDataRequestBody)
 	trailer := constructTrailer(headerWithBody)
 	message := strings.ReplaceAll(fmt.Sprintf("%s%s", headerWithBody, trailer), "|", "\u0001")
-	log.Print(headerWithBody)
+	// log.Print(headerWithBody)
 	return message, nil
 }
 
@@ -142,7 +142,12 @@ func (user *FxUser) constructHeader(bodyMessage string, messageType CtraderSessi
 	var messageTypeStr = fmt.Sprintf("%d", messageType)
 	var header string
 	var headerParams []string
-	messageSequenceString := strconv.Itoa(session.MessageSequenceNumber)
+	var messageSequenceString string
+	if channel == QUOTE {
+		messageSequenceString = strconv.Itoa(session.PriceMessageSequenceNumber)
+	} else {
+		messageSequenceString = strconv.Itoa(session.TradeMessageSequenceNumber)
+	}
 	messageTs := time.Now().UTC().Format(YYYYMMDDhhmmss)
 
 	headerParams = append(headerParams, formatMessageSlice(HeaderMessageType, messageTypeStr, false))

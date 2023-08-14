@@ -3,9 +3,13 @@ package api
 import "github.com/fasthttp/websocket"
 
 type ApiSession struct {
-	Client ApiClient
-	Pools  string
-	Cid    string
+	Client       ApiClient
+	accountId    int
+	Pools        string
+	Cid          string
+	LicenseKey   string
+	refreshToken string
+	accessToken  string
 }
 
 type ApiClient struct {
@@ -22,6 +26,11 @@ type ApiMonitorMessage struct {
 	MessageType string  `json:"type"` //close or open
 }
 
+type ApiStoredPositionsResponse struct {
+	CopyPositionID string `json:"copyPostionID"`
+	PositionID     string `json:"positionID"`
+}
+
 type apiErrorResponse struct {
 	ResponseCode int    `json:"responseCode"`
 	Message      string `json:"message"`
@@ -30,4 +39,9 @@ type apiErrorResponse struct {
 type validLicenseKeyResponse struct {
 	ResponseCode int    `json:"responseCode"`
 	Cid          string `json:"cid"`
+}
+
+type apiAuthResponse struct {
+	AccessToken  string `json:"accessToken"`
+	RefreshToken string `json:"refreshToken"`
 }
