@@ -48,7 +48,10 @@ func CreateApiConnection(cid, pools string) (*websocket.Conn, error) {
 
 func (session *ApiSession) ListenForMessages() {
 	for {
-		messageType, message, err := session.Client.Connection.ReadMessage()
+		if session.Client.Connection == nil {
+			return
+		}
+		_, message, err := session.Client.Connection.ReadMessage()
 		if err != nil {
 			switch {
 			case err == io.EOF:
@@ -103,7 +106,6 @@ func (session *ApiSession) ListenForMessages() {
 			}
 		}
 		// messageStr := string(message)
-		log.Printf("got message of type: %d\n", messageType)
 		session.Client.CurrentMessage <- message
 	}
 

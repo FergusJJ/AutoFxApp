@@ -7,6 +7,7 @@ const (
 	UserDataError
 	ProgramError
 	MarketError
+	CtraderConnectionError
 )
 
 type ErrorWithCause struct {

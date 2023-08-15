@@ -3,35 +3,65 @@ package fix
 import (
 	"fmt"
 	"log"
+	"strings"
 )
 
-func (session *FxSession) CtraderLogin(user FxUser) *ErrorWithCause {
-	loginMessage, err := user.constructLogin(session)
-	if err != nil {
+func (session *FxSession) CtraderLogin(user FxUser, channel CtraderMessageChannel) *ErrorWithCause {
+	var fxResponseMap []*FixResponse
 
-		return &ErrorWithCause{
-			ErrorMessage: err.Error(),
-			ErrorCause:   ProgramError,
-		}
-	}
-	resp := session.sendMessage(loginMessage, user)
-	if resp.err != nil {
-		return &ErrorWithCause{
-			ErrorMessage: err.Error(),
-			ErrorCause:   ConnectionError,
-		}
-	}
-	bodyStringSlice := preparseBody(resp.body)
-	_, _, err = ParseFIXResponse(bodyStringSlice[0], Logon)
+	loginMessage, err := user.constructLogin(session, channel)
 	if err != nil {
 		return &ErrorWithCause{
 			ErrorMessage: err.Error(),
 			ErrorCause:   UserDataError,
 		}
 	}
+	if channel == QUOTE {
+		fxResponseMap, err = session.PriceClient.RoundTrip(loginMessage)
 
-	session.MessageSequenceNumber++
-	return nil
+	}
+	if channel == TRADE {
+		fxResponseMap, err = session.TradeClient.RoundTrip(loginMessage)
+
+	}
+
+	if err != nil {
+		return &ErrorWithCause{
+			ErrorMessage: err.Error(),
+			ErrorCause:   CtraderConnectionError,
+		}
+	}
+	if channel == QUOTE {
+		session.PriceMessageSequenceNumber++
+	} else {
+		session.TradeMessageSequenceNumber++
+	}
+
+	if len(fxResponseMap) != 1 {
+		return &ErrorWithCause{
+			ErrorMessage: fmt.Sprintf("ctrader login, unexpected response length: %d", len(fxResponseMap)),
+			ErrorCause:   ProgramError,
+		}
+	}
+	success_, err := ParseFixResponse(fxResponseMap[0], Logon)
+	if err != nil {
+		return &ErrorWithCause{
+			ErrorMessage: err.Error(),
+			ErrorCause:   UserDataError,
+		}
+	}
+	success, ok := success_.(bool)
+	if !ok {
+		log.Fatalf("cannot convert interface: %v to bool", success_)
+	}
+	if success {
+		return nil
+	}
+	return &ErrorWithCause{
+		ErrorMessage: "unable to login",
+		ErrorCause:   UserDataError,
+	}
+
 }
 
 // func (session *FxSession) CtraderSecurityList(user FxUser) *ErrorWithCause {
@@ -75,148 +105,189 @@ func (session *FxSession) CtraderLogin(user FxUser) *ErrorWithCause {
 
 // }
 
-/* NEED EXTRA PARAMS*/
-
 // newOrderData := idos.OrderSingleData{OrderQty: "1000", Symbol: "1", Side: "buy", OrdType: "market"}
-func (session *FxSession) CtraderNewOrderSingle(user FxUser, orderData OrderData) (*ExecutionReport, *ErrorWithCause) {
+func (session *FxSession) CtraderNewOrderSingle(user FxUser, orderData OrderData) (ExecutionReport, *ErrorWithCause) {
 
 	orderMessage, err := user.constructNewOrderSingle(session, orderData)
 	if err != nil {
-		return nil, &ErrorWithCause{
+		return ExecutionReport{}, &ErrorWithCause{
 			ErrorMessage: err.Error(),
 			ErrorCause:   ProgramError,
 		}
 	}
-	log.Println("Order message", orderMessage)
-	resp := session.sendMessage(orderMessage, user)
-	if resp.err != nil {
-		return nil, &ErrorWithCause{
-			ErrorMessage: resp.err.Error(),
-			ErrorCause:   ConnectionError,
-		}
-	}
-	log.Println("Order response", string(resp.body))
-	bodyStringSlice := preparseBody(resp.body)
-	respType, parsedResp, err := ParseFIXResponse(bodyStringSlice[0], NewOrderSingle)
+	fxResponseMap, err := session.TradeClient.RoundTrip(orderMessage)
 	if err != nil {
-		return nil, &ErrorWithCause{
+		return ExecutionReport{}, &ErrorWithCause{
 			ErrorMessage: err.Error(),
-			ErrorCause:   UserDataError,
+			ErrorCause:   CtraderConnectionError,
 		}
 	}
-	switch respType {
-	case "8":
-		executionReport, ok := parsedResp.(ExecutionReport)
-		if !ok {
-			log.Fatal(`error casting struct with respType of "8" to ExecutionReport`)
-		}
-		return &executionReport, nil
-
-	case "9":
-		orderCancelReject, ok := parsedResp.(OrderCancelReject)
-		if !ok {
-			log.Fatal(`error casting struct with respType of "9" to OrderCancelReject`)
-		}
-		log.Printf("%+v", orderCancelReject)
-		return nil, &ErrorWithCause{
-			ErrorMessage: "Order Cancel Reject",
-			ErrorCause:   MarketError,
-		}
-	case "j":
-		businessMessageReject, ok := parsedResp.(BusinessMessageReject)
-		if !ok {
-			log.Fatal(`error casting struct with respType of "j" to BusinessMessageReject`)
-		}
-		log.Printf("%+v", businessMessageReject)
-		return nil, &ErrorWithCause{
-			ErrorMessage: "Business Message Reject",
-			ErrorCause:   ProgramError,
-		}
-
-	}
-	session.MessageSequenceNumber++
-	return nil, &ErrorWithCause{
-		ErrorMessage: fmt.Sprintf("respType fallthrough %s", respType),
-		ErrorCause:   ProgramError,
-	}
-}
-
-// Needs clordID
-func (session *FxSession) CtraderOrderStatus(user *FxUser) {
-
-}
-
-func (session *FxSession) CtraderMassStatus(user FxUser) *ErrorWithCause {
-	statusMessage, err := user.constructOrderMassStatusRequest(session)
-	if err != nil {
-		return &ErrorWithCause{
-			ErrorMessage: err.Error(),
-			ErrorCause:   ProgramError,
-		}
-
-	}
-	resp := session.sendMessage(statusMessage, user)
-	if resp.err != nil {
-		return &ErrorWithCause{
-			ErrorMessage: resp.err.Error(),
-			ErrorCause:   ConnectionError,
-		}
-	}
-
-	bodyStringSlice := preparseBody(resp.body)
-
-	_, _, err = ParseFIXResponse(bodyStringSlice[0], OrderMassStatusRequest)
-	if err != nil {
-		return &ErrorWithCause{
-			ErrorMessage: err.Error(),
-			ErrorCause:   UserDataError,
-		}
-	}
-	session.MessageSequenceNumber++
-	return nil
-}
-
-func (session *FxSession) CtraderRequestForPositions(user FxUser) *ErrorWithCause {
-
-	orderMessage, err := user.constructPositionsRequest(session) //constructOrderMassStatusRequest(session)
-	if err != nil {
-		return &ErrorWithCause{
-			ErrorMessage: err.Error(),
-			ErrorCause:   ProgramError,
-		}
-
-	}
-	resp := session.sendMessage(orderMessage, user)
-	if resp.err != nil {
-		return &ErrorWithCause{
-			ErrorMessage: resp.err.Error(),
-			ErrorCause:   ConnectionError,
-		}
-	}
-	//want to pre parse in case more than 1 position is present
-	positionReports := []PositionReport{}
-	bodyStringSlice := preparseBody(resp.body)
-	for _, v := range bodyStringSlice {
-		_, positionReport, err := ParseFIXResponse(v, RequestForPositions)
+	session.TradeMessageSequenceNumber++
+	executionReports := []ExecutionReport{}
+	for _, v := range fxResponseMap {
+		fxRes, err := ParseFixResponse(v, NewOrderSingle)
 		if err != nil {
-			return &ErrorWithCause{
-				ErrorMessage: err.Error(),
-				ErrorCause:   UserDataError,
+			if strings.Contains(err.Error(), "business reject") {
+				businessRejectRes, ok := fxRes.(BusinessMessageReject)
+				if !ok {
+					log.Fatalf("cannot cast %v to businessMessageReject", fxRes)
+				}
+				return ExecutionReport{}, &ErrorWithCause{
+					ErrorCause:   MarketError,
+					ErrorMessage: businessRejectRes.Text,
+				}
 			}
 		}
-		positionReportCast, ok := positionReport.(PositionReport)
+
+		executionReport, ok := fxRes.(ExecutionReport)
 		if !ok {
-			log.Fatalf("couldnt cast: \n%+v\n to positionReport{}", positionReport)
+			log.Fatalf("cannot cast %v to executionReport", fxRes)
 		}
-		positionReports = append(positionReports, positionReportCast)
+		executionReports = append(executionReports, executionReport)
 	}
-	log.Println(len(positionReports))
-	session.MessageSequenceNumber++
-	return nil
+
+	return executionReports[0], nil
+}
+
+// // Needs clordID
+// func (session *FxSession) CtraderOrderStatus(user *FxUser) {
+
+// }
+
+// might want to return a mapping here, then can check the 911 tag of the first item to see the number of reports if it is needed
+func (session *FxSession) CtraderOrderStatus(user FxUser, clOrdID string) (ExecutionReport, *ErrorWithCause) {
+	statusMessage, err := user.constructOrderStatusRequest(session, clOrdID)
+	if err != nil {
+		return ExecutionReport{}, &ErrorWithCause{
+			ErrorMessage: err.Error(),
+			ErrorCause:   ProgramError,
+		}
+
+	}
+	fxResponseMap, err := session.TradeClient.RoundTrip(statusMessage)
+	if err != nil {
+		return ExecutionReport{}, &ErrorWithCause{
+			ErrorMessage: err.Error(),
+			ErrorCause:   CtraderConnectionError,
+		}
+	}
+	session.TradeMessageSequenceNumber++
+	if len(fxResponseMap) != 1 {
+		log.Fatalf("order status: resp map len %d: %+v", len(fxResponseMap), fxResponseMap)
+	}
+	fxRes, err := ParseFixResponse(fxResponseMap[0], NewOrderSingle)
+	if err != nil {
+		if strings.Contains(err.Error(), "business reject") {
+			businessRejectRes, ok := fxRes.(BusinessMessageReject)
+			if !ok {
+				log.Fatalf("cannot cast %v to businessMessageReject", fxRes)
+			}
+			return ExecutionReport{}, &ErrorWithCause{
+				ErrorCause:   MarketError,
+				ErrorMessage: businessRejectRes.Text,
+			}
+		}
+	}
+
+	executionReport, ok := fxRes.(ExecutionReport)
+	if !ok {
+		log.Fatalf("cannot cast %v to executionReport", fxRes)
+	}
+	return executionReport, nil
+}
+
+func (session *FxSession) CtraderRequestForPositions(user FxUser) ([]PositionReport, *ErrorWithCause) {
+
+	positionsMessage, err := user.constructPositionsRequest(session) //constructOrderMassStatusRequest(session)
+	if err != nil {
+		return []PositionReport{}, &ErrorWithCause{
+			ErrorMessage: err.Error(),
+			ErrorCause:   ProgramError,
+		}
+
+	}
+	fxResponseMap, err := session.TradeClient.RoundTrip(positionsMessage)
+	if err != nil {
+		return nil, &ErrorWithCause{
+			ErrorMessage: err.Error(),
+			ErrorCause:   CtraderConnectionError,
+		}
+	}
+	session.TradeMessageSequenceNumber++
+	var positions = make([]PositionReport, 0)
+	for _, message := range fxResponseMap {
+		//does not currently return an error so not gonna have proper handling rn
+		fxRes, err := ParseFixResponse(message, RequestForPositions)
+		if err != nil {
+			log.Fatalf("error getting positions: %+v", err)
+		}
+		positionReport, ok := fxRes.(PositionReport)
+		if !ok {
+			log.Fatalf("cannot cast %v to positionReport", fxRes)
+		}
+		positions = append(positions, positionReport)
+	}
+
+	return positions, nil
+}
+
+func (session *FxSession) CtraderMarketDataRequest(user FxUser, subscription MarketDataSubscription) ([]MarketDataSnapshot, *ErrorWithCause) {
+
+	marketDataRequestMessage, err := user.constructMarketDataRequest(session, subscription)
+	if err != nil {
+		return nil, &ErrorWithCause{
+			ErrorMessage: err.Error(),
+			ErrorCause:   ProgramError,
+		}
+	}
+	fxResponseMap, err := session.PriceClient.RoundTrip(marketDataRequestMessage)
+	if err != nil {
+		return nil, &ErrorWithCause{
+			ErrorMessage: err.Error(),
+			ErrorCause:   CtraderConnectionError,
+		}
+	}
+	session.PriceMessageSequenceNumber++
+	var data = make([]MarketDataSnapshot, 0)
+	for _, message := range fxResponseMap {
+		//does not currently return an error so not gonna have proper handling rn
+		fxRes, err := ParseFixResponse(message, MarketDataRequest)
+		if err != nil {
+			_, ok := fxRes.(BusinessMessageReject)
+			if !ok {
+				log.Fatalf("error getting marketData: %+v", err)
+			}
+			return data, &ErrorWithCause{
+				ErrorCause:   MarketError,
+				ErrorMessage: err.Error(),
+			}
+		}
+		marketDataSnapshot, ok := fxRes.(MarketDataSnapshot)
+		if !ok {
+			log.Fatalf("cannot cast %v to marketDataSnapshot", fxRes)
+		}
+		data = append(data, marketDataSnapshot)
+	}
+
+	return data, nil
+
 }
 
 /*
 
-8=FIX.4.4|9=106|35=A|34=1|49=CSERVER|50=TRADE|52=20170117-08:03:04.509|56=live.theBroker.12345|57=any_string|98=0|108=30|141=Y|10=066|
-8=FIX.4.4|9=109|35=5|34=1|49=CSERVER|50=TRADE|52=20170117-08:03:04.509|56=live.theBroker.12345|58=InternalError: RET_INVALID_DATA|10=033|
+doc:
+34=3|50=QUOTE|263=1|264=1|265=1|146=1|55=1|267=2|269=0|269=1|10=094|
+
+
+go
+57=TRADE|50=TRADE|34=2|263=1|264=1|265=1|267=2|269=1|146=1|55=1|
+
+
+doc -
+57=TRADE
+50=TRADE
+
+doc +
+50=QUOTE
+
 */

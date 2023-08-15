@@ -8,13 +8,16 @@ import (
 	"pollo/internal/app"
 	"pollo/pkg/api"
 	"pollo/pkg/fix"
-	"pollo/pkg/shutdown"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/inancgumus/screen"
 )
 
 /*
-When getting position report, fix sends multiple messages, these  don't always come in at once, so aren't read into []byte on one request so for 4
-positions may get 3 the first time then 1 the second time, this will mean that all 4 are fetched eventually but may want to make sure that server
-has completely finished sending the messages first
+TODO: Update table properly, add fields
+TODO: Calculate the price
+
 */
 
 func main() {
@@ -30,37 +33,41 @@ func main() {
 		exitCode = 1
 		return
 	}
-
-	shutdown.Gracefully()
+	//shutdown.Gracefully()
 }
 
 func start() (func(), error) {
-	//verify with whop
-	//load user data, check they have access
-
+	done := make(chan struct{})
+	errChan := make(chan error, 1)
 	app, cleanup, err := initialiseProgram()
 	if err != nil {
 		return nil, err
 	}
-	/*
-		Run app, all the app specific variables should be kept within this struct
-		May want to add an "isLoggedIn" field to app, in case it is necessary to always logout of FIX
-	*/
-	// go app.MainLoop()
-	// if err := app.UI.App.Run(); err != nil {
-	// 	log.Println("ui error:", err)
-	// }
-	appErr := app.MainLoop()
-	if appErr != nil {
-		log.Printf("%v: %s\n", appErr.ErrorCause, appErr.ErrorMessage)
-		return func() {
-			//close app in cleanup
-			app.ScreenWriter.Write("running cleanup...")
-			cleanup()
-		}, nil
+	screen.Clear()
+	screen.MoveTopLeft()
+	go func() {
+		defer close(done)
+		app.MainLoop()
+		app.Program.Program.Send(tea.QuitMsg{})
+	}()
+	errChan <- func() error {
+		_, err := app.Program.Program.Run()
+		if err != nil {
+			return err
+		}
+		return nil
+	}()
+	select {
+	case err := <-errChan:
+		if err != nil {
+			log.Println("ui error:", err)
+			return cleanup, err
+		}
+
+	case <-done:
 	}
 	return func() {
-		app.ScreenWriter.Write("running cleanup...")
+		log.Println("running cleanup...")
 		cleanup()
 	}, nil
 }
@@ -68,8 +75,8 @@ func start() (func(), error) {
 func initialiseProgram() (*app.FxApp, func(), error) {
 
 	App := &app.FxApp{}
-	App.ScreenWriter = app.NewScreenWriter(5)
 
+	App.Program.Program = tea.NewProgram(app.NewModel("fergus"), tea.WithAltScreen())
 	//FxUser & Lisence Key Start
 	fxUser, err := config.LoadDataFromJson()
 	if err != nil {
@@ -90,38 +97,62 @@ func initialiseProgram() (*app.FxApp, func(), error) {
 	//FxUser & Lisence Key Done
 
 	//FxSession Start
-
-	fxConn, err := fix.CreateConnection(App.FxUser.HostName, fix.TradePort)
-	if err != nil {
-		//cleanup should involve closing fx connection
+	timeout := time.Duration(10 * time.Second)
+	fxPriceClient := fix.NewTCPClient(App.FxUser.HostName, fix.PricePort, timeout, 4096)
+	if err = fxPriceClient.Dial(); err != nil {
 		return nil, func() {
 			App.CloseExistingConnections()
+			log.Println("closed existing connections")
 		}, err
 	}
-	App.FxSession.Connection = fxConn
-	App.FxSession.MessageSequenceNumber = 1
+	fxTradeClient := fix.NewTCPClient(App.FxUser.HostName, fix.TradePort, timeout, 4096)
+	if err = fxTradeClient.Dial(); err != nil {
+		return nil, func() {
+			App.CloseExistingConnections()
+			log.Println("closed existing connections")
+		}, err
+	}
+
+	App.FxSession.TradeClient = fxTradeClient
+	App.FxSession.PriceClient = fxPriceClient
+	App.FxSession.TradeMessageSequenceNumber = 1
+	App.FxSession.PriceMessageSequenceNumber = 1
 	App.FxSession.LoggedIn = false
-	App.ScreenWriter.Write("connected to fix api")
+	App.FxSession.MarketDataSubscriptions = make(map[string]*fix.MarketDataSubscription)
+	log.Println("connected to fix api")
 	//FxSesion Done
 
 	//ApiSession Start
 	cid, err := api.CheckLicense(App.LicenseKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, func() {
+			App.CloseExistingConnections()
+			log.Println("closed existing connections")
+		}, err
 	}
-	App.ScreenWriter.Write("license verified")
+
+	log.Println("license verified")
 	App.ApiSession.Cid = cid
+	App.ApiSession.LicenseKey = App.LicenseKey
+	err = App.ApiSession.FetchApiAuth()
+	if err != nil {
+		return nil, func() {
+			App.CloseExistingConnections()
+			log.Println("closed existing connections")
+		}, err
+	}
+	log.Println("session authorised")
 
 	apiConn, err := api.CreateApiConnection(App.ApiSession.Cid, pools)
 	if err != nil {
 		return nil, func() {
 			App.CloseExistingConnections()
-			App.ScreenWriter.Write("closed existing connections")
+			log.Println("closed existing connections")
 		}, err
 	}
 	App.ApiSession.Client.Connection = apiConn
 	App.ApiSession.Client.CurrentMessage = make(chan []byte)
-	App.ScreenWriter.Write("connected to internal api")
+	log.Println("connected to internal api")
 
 	//ApiSesion Done
 
@@ -130,6 +161,6 @@ func initialiseProgram() (*app.FxApp, func(), error) {
 	return App, func() {
 		//cleanup operations, i.e. close api ws connection, close fix api session
 		App.CloseExistingConnections()
-		App.ScreenWriter.Write("closed existing connections")
+		log.Println("closed existing connections")
 	}, nil
 }

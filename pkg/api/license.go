@@ -9,27 +9,29 @@ import (
 )
 
 func CheckLicense(licenseKey string) (cid string, err error) {
-	apiEnpoint, err := config.Config("API_ADDRESS")
+	apiAddress, err := config.Config("API_ADDRESS")
 	if err != nil {
 		return "", err
 	}
-	requestUri := fmt.Sprintf("http://%s/whop/validate?license=%s", apiEnpoint, licenseKey)
+	requestUri := fmt.Sprintf("http://%s/whop/validate?license=%s", apiAddress, licenseKey)
 	req := fasthttp.AcquireRequest()
 	req.SetRequestURI(requestUri)
 	req.Header.SetMethod(fasthttp.MethodGet)
-	req.Header.Add("accept", "application/json")
-	req.Header.Add("content-type", "application/json")
+	req.Header.Set("accept", "application/json")
 	resp := fasthttp.AcquireResponse()
-	if err := fasthttp.Do(req, resp); err != nil {
+	err = fasthttp.Do(req, resp)
+	fasthttp.ReleaseRequest(req)
+	if err != nil {
 		return "", err
 	}
+	defer fasthttp.ReleaseResponse(resp)
 	jsonResp := validLicenseKeyResponse{}
 	if err := json.Unmarshal(resp.Body(), &jsonResp); err != nil {
 		return "", err
 	}
-	//then we have an error
+
 	if jsonResp.Cid == "" {
-		jsonErrorResp := apiErrorResponse{}
+		jsonErrorResp := apiErrorResponse{} //where statuscode is the status from WHOP, not the api
 		err = json.Unmarshal(resp.Body(), &jsonErrorResp)
 		if err != nil {
 			return "", err
