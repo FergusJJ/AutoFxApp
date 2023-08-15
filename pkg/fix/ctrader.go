@@ -43,7 +43,7 @@ func (session *FxSession) CtraderLogin(user FxUser, channel CtraderMessageChanne
 			ErrorCause:   ProgramError,
 		}
 	}
-	success_, err := parseFixResponse(fxResponseMap[0], Logon)
+	success_, err := ParseFixResponse(fxResponseMap[0], Logon)
 	if err != nil {
 		return &ErrorWithCause{
 			ErrorMessage: err.Error(),
@@ -105,8 +105,6 @@ func (session *FxSession) CtraderLogin(user FxUser, channel CtraderMessageChanne
 
 // }
 
-/* NEED EXTRA PARAMS*/
-
 // newOrderData := idos.OrderSingleData{OrderQty: "1000", Symbol: "1", Side: "buy", OrdType: "market"}
 func (session *FxSession) CtraderNewOrderSingle(user FxUser, orderData OrderData) (ExecutionReport, *ErrorWithCause) {
 
@@ -125,28 +123,30 @@ func (session *FxSession) CtraderNewOrderSingle(user FxUser, orderData OrderData
 		}
 	}
 	session.TradeMessageSequenceNumber++
-	if len(fxResponseMap) != 1 {
-		log.Fatalf("resp map len %d: %+v", len(fxResponseMap), fxResponseMap)
-	}
-	fxRes, err := parseFixResponse(fxResponseMap[0], NewOrderSingle)
-	if err != nil {
-		if strings.Contains(err.Error(), "business reject") {
-			businessRejectRes, ok := fxRes.(BusinessMessageReject)
-			if !ok {
-				log.Fatalf("cannot cast %v to businessMessageReject", fxRes)
-			}
-			return ExecutionReport{}, &ErrorWithCause{
-				ErrorCause:   MarketError,
-				ErrorMessage: businessRejectRes.Text,
+	executionReports := []ExecutionReport{}
+	for _, v := range fxResponseMap {
+		fxRes, err := ParseFixResponse(v, NewOrderSingle)
+		if err != nil {
+			if strings.Contains(err.Error(), "business reject") {
+				businessRejectRes, ok := fxRes.(BusinessMessageReject)
+				if !ok {
+					log.Fatalf("cannot cast %v to businessMessageReject", fxRes)
+				}
+				return ExecutionReport{}, &ErrorWithCause{
+					ErrorCause:   MarketError,
+					ErrorMessage: businessRejectRes.Text,
+				}
 			}
 		}
+
+		executionReport, ok := fxRes.(ExecutionReport)
+		if !ok {
+			log.Fatalf("cannot cast %v to executionReport", fxRes)
+		}
+		executionReports = append(executionReports, executionReport)
 	}
 
-	executionReport, ok := fxRes.(ExecutionReport)
-	if !ok {
-		log.Fatalf("cannot cast %v to executionReport", fxRes)
-	}
-	return executionReport, nil
+	return executionReports[0], nil
 }
 
 // // Needs clordID
@@ -173,9 +173,9 @@ func (session *FxSession) CtraderOrderStatus(user FxUser, clOrdID string) (Execu
 	}
 	session.TradeMessageSequenceNumber++
 	if len(fxResponseMap) != 1 {
-		log.Fatalf("resp map len %d: %+v", len(fxResponseMap), fxResponseMap)
+		log.Fatalf("order status: resp map len %d: %+v", len(fxResponseMap), fxResponseMap)
 	}
-	fxRes, err := parseFixResponse(fxResponseMap[0], NewOrderSingle)
+	fxRes, err := ParseFixResponse(fxResponseMap[0], NewOrderSingle)
 	if err != nil {
 		if strings.Contains(err.Error(), "business reject") {
 			businessRejectRes, ok := fxRes.(BusinessMessageReject)
@@ -217,7 +217,7 @@ func (session *FxSession) CtraderRequestForPositions(user FxUser) ([]PositionRep
 	var positions = make([]PositionReport, 0)
 	for _, message := range fxResponseMap {
 		//does not currently return an error so not gonna have proper handling rn
-		fxRes, err := parseFixResponse(message, RequestForPositions)
+		fxRes, err := ParseFixResponse(message, RequestForPositions)
 		if err != nil {
 			log.Fatalf("error getting positions: %+v", err)
 		}
@@ -251,7 +251,7 @@ func (session *FxSession) CtraderMarketDataRequest(user FxUser, subscription Mar
 	var data = make([]MarketDataSnapshot, 0)
 	for _, message := range fxResponseMap {
 		//does not currently return an error so not gonna have proper handling rn
-		fxRes, err := parseFixResponse(message, MarketDataRequest)
+		fxRes, err := ParseFixResponse(message, MarketDataRequest)
 		if err != nil {
 			_, ok := fxRes.(BusinessMessageReject)
 			if !ok {

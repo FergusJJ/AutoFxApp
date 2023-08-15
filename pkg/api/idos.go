@@ -26,8 +26,8 @@ type ApiMonitorMessage struct {
 	MessageType string  `json:"type"` //close or open
 }
 
-type ApiStoredPositionsResponse struct {
-	CopyPositionID string `json:"copyPostionID"`
+type ApiStoredPosition struct {
+	CopyPositionID string `json:"copyPositionID"`
 	PositionID     string `json:"positionID"`
 }
 

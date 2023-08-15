@@ -12,8 +12,12 @@ var appPadding = lipgloss.NewStyle().Padding(2, 1)
 
 var titleStyle = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("#FFFDF5")).
-	// Background(lipgloss.Color("#25A065")).
 	Padding(0, 1)
+
+// var lossStyle = lipgloss.NewStyle().
+// 	Foreground(lipgloss.Color("#ff0000"))
+// var profitStyle = lipgloss.NewStyle().
+// 	Foreground(lipgloss.Color("#00ff00"))
 
 var tableStyle = lipgloss.NewStyle().
 	BorderStyle(lipgloss.RoundedBorder()).
@@ -87,7 +91,11 @@ func (m Model) View() string {
 	//append the table on to the message
 	rows := []table.Row{}
 	for _, v := range m.positions {
-		rows = append(rows, []string{v.positionId, v.copyPositionId, v.timestamp, v.symbol, v.volume, v.side, v.entryPrice, v.currentPrice, v.grossProfit})
+		if v.isProfit {
+			rows = append(rows, []string{v.positionId, v.copyPositionId, v.timestamp, v.symbol, v.volume, v.side, v.entryPrice, v.currentPrice, v.grossProfit})
+		} else {
+			rows = append(rows, []string{v.positionId, v.copyPositionId, v.timestamp, v.symbol, v.volume, v.side, v.entryPrice, v.currentPrice, v.grossProfit})
+		}
 
 	}
 	m.table = initialiseTable(rows...)
@@ -99,6 +107,7 @@ func (m Model) View() string {
 	tmp := ""
 	for _, msg := range m.backgroundFeed {
 		tmp += fmt.Sprintf("%s\n", msg)
+
 	}
 	s += tmp
 	s += lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render("\nPress q to quit.\n")

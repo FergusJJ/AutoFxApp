@@ -80,6 +80,28 @@ func (c *FixClient) RoundTrip(message string) ([]*FixResponse, error) {
 
 }
 
+func (c *FixClient) ReRead() ([]*FixResponse, error) {
+	messages, err := c.Receive()
+	if err != nil {
+		log.Fatalf("receive: %+v", err)
+
+		return nil, err
+	}
+
+	var responses []*FixResponse
+	for _, msg := range messages {
+
+		respString := string(msg)
+		if !validateChecksum(respString) {
+			return nil, errors.New("invalid checksum")
+		}
+		tmpResponse := newParseFixResponse(msg)
+		responses = append(responses, tmpResponse)
+	}
+
+	return responses, nil
+}
+
 func (c *FixClient) Dial() error {
 	tcpAddress, err := net.ResolveTCPAddr("tcp", c.ServerAddr)
 	if err != nil {

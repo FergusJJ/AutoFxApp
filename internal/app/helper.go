@@ -22,32 +22,33 @@ func calculateProfits(boughtAt, currentPrice, volume float64, side string) (netP
 
 // errors that are (hopefully) the users fault should be logged to the users screen, the program should then wait for input then exit
 // errors that are bugs should output a generic message, send the error to webhook, and then wait for the user to input to exit
-func (app *FxApp) HandleError(cErr *fix.ErrorWithCause, errorSource string) *fix.ErrorWithCause {
+func (app *FxApp) HandleError(cErr *fix.ErrorWithCause, errorSource string) bool {
+	time.Sleep(10 * time.Second)
 	switch cErr.ErrorCause {
 	case fix.MarketError: //carry on with execution
 		app.Program.SendColor(cErr.ErrorMessage, "red")
 		logs.SendApplicationLog(errors.New(cErr.ErrorMessage), errorSource, app.LicenseKey)
 		time.Sleep(retryDelay)
-		return nil
+		return false
 	case fix.ConnectionError: //carry on with execution
 		app.Program.SendColor("error sending message to API, retrying", "red")
 		time.Sleep(retryDelay)
-		return nil
+		return false
 	case fix.CtraderConnectionError:
 		app.Program.SendColor("error sending message to FIX, retrying", "red")
 		time.Sleep(retryDelay)
-		return nil
+		return false
 	case fix.UserDataError: //exit
 		app.Program.SendColor(fmt.Sprintf("unexpected error occurred, exiting: %s", cErr.ErrorMessage), "red")
-		return cErr
+		return true
 	case fix.ProgramError: //exit
 		app.Program.SendColor("unexpected error occurred, exiting", "red")
 		logs.SendApplicationLog(errors.New(cErr.ErrorMessage), errorSource, app.LicenseKey)
-		return cErr
+		return true
 	default: //exit
 		app.Program.SendColor("unexpected error occurred, exiting", "red")
 		logs.SendApplicationLog(errors.New(cErr.ErrorMessage), errorSource, app.LicenseKey)
-		return cErr
+		return true
 	}
 }
 

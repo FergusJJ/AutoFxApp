@@ -68,6 +68,9 @@ func initialiseTable(rows ...table.Row) table.Model {
 		BorderForeground(lipgloss.Color("240")).
 		BorderBottom(true).
 		Bold(false)
+
+	s.Cell.AlignHorizontal(lipgloss.Left)
+	// s.Cell.Color
 	// s.Selected = s.Selected.
 	// 	Foreground(lipgloss.Color("229")).
 	// 	Background(lipgloss.Color("57")).

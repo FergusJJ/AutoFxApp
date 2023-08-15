@@ -118,6 +118,7 @@ func initialiseProgram() (*app.FxApp, func(), error) {
 	App.FxSession.TradeMessageSequenceNumber = 1
 	App.FxSession.PriceMessageSequenceNumber = 1
 	App.FxSession.LoggedIn = false
+	App.FxSession.MarketDataSubscriptions = make(map[string]*fix.MarketDataSubscription)
 	log.Println("connected to fix api")
 	//FxSesion Done
 

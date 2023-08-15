@@ -31,6 +31,7 @@ type uiPositionData struct {
 	timestamp      string
 	side           string
 	symbol         string
+	isProfit       bool
 }
 
 type orderInProgressData struct {

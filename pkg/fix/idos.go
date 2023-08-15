@@ -34,10 +34,11 @@ type MessageBodyAndTag struct {
 }
 
 type OrderData struct {
-	Symbol    string  `json:"symbol"`
-	Volume    float64 `json:"volume"`
-	Direction string  `json:"direction"` //"buy"/"sell"
-	OrderType string  `json:"orderType"` //"market"
+	PosMaintRptID string  `json:"posMaintRptID"`
+	Symbol        string  `json:"symbol"`
+	Volume        float64 `json:"volume"`
+	Direction     string  `json:"direction"` //"buy"/"sell"
+	OrderType     string  `json:"orderType"` //"market"
 }
 
 type ExecutionReport struct {
@@ -304,6 +305,7 @@ const (
 	NOSStopPx       CtraderParamIds = 99  //Not required
 	NOSExpireTime   CtraderParamIds = 126 //Not Required
 	NOSDesignation  CtraderParamIds = 494 //Not Required
+	PosMaintRptID   CtraderParamIds = 712
 
 	//35=AF OMSR
 	MassStatusReqID   CtraderParamIds = 584
@@ -362,6 +364,7 @@ var MessageKeyValuePairs = map[CtraderParamIds]map[string]string{
 	NOSStopPx:       {}, //Stop orders,
 	NOSExpireTime:   {}, //self explanatory, probably not going to use
 	NOSDesignation:  {},
+	PosMaintRptID:   {},
 
 	//Standard Headers
 	HeaderBeginString:           {"begin": "FIX.4.4"},

@@ -66,6 +66,9 @@ func (user *FxUser) constructNewOrderSingle(session *FxSession, orderData OrderD
 	newOrderSingleParams = append(newOrderSingleParams, formatMessageSlice(NOSTransactTime, transactTime, true))
 	newOrderSingleParams = append(newOrderSingleParams, formatMessageSlice(NOSOrderQty, volAsString, true))
 	newOrderSingleParams = append(newOrderSingleParams, formatMessageSlice(NOSOrdType, orderData.OrderType, false))
+	if orderData.PosMaintRptID != "" {
+		newOrderSingleParams = append(newOrderSingleParams, formatMessageSlice(PosMaintRptID, orderData.PosMaintRptID, true))
+	}
 	newOrderSingleBody = strings.Join(newOrderSingleParams, "|")
 	newOrderSingleBody = fmt.Sprintf("%s|", newOrderSingleBody)
 	header := user.constructHeader(newOrderSingleBody, NewOrderSingle, session, TRADE)
@@ -208,7 +211,7 @@ func GetUUID() string {
 	return uuid.New().String()
 }
 
-func parseFixResponse(resp *FixResponse, reqType CtraderSessionMessageType) (interface{}, error) {
+func ParseFixResponse(resp *FixResponse, reqType CtraderSessionMessageType) (interface{}, error) {
 	if resp.MsgType == "3" {
 		//session level violation, just want the reason in this case.
 		var sessionRejectMessageMapping = map[string]string{}
