@@ -1,15 +1,13 @@
 package app
 
 import (
-	"errors"
 	"fmt"
 	"pollo/internal/logs"
-	"pollo/pkg/fix"
 	"strings"
-	"time"
 )
 
 func calculateProfits(boughtAt, currentPrice, volume float64, side string) (netProfit float64) {
+	//need comission & swap to calculate gross profit.Going to have to store more in database for position, or could just store orderID and get the execution report?
 	switch side {
 	case "buy":
 		netProfit = (currentPrice - boughtAt) * volume
@@ -20,36 +18,8 @@ func calculateProfits(boughtAt, currentPrice, volume float64, side string) (netP
 	return netProfit
 }
 
-// errors that are (hopefully) the users fault should be logged to the users screen, the program should then wait for input then exit
-// errors that are bugs should output a generic message, send the error to webhook, and then wait for the user to input to exit
-func (app *FxApp) HandleError(cErr *fix.ErrorWithCause, errorSource string) bool {
-	time.Sleep(10 * time.Second)
-	switch cErr.ErrorCause {
-	case fix.MarketError: //carry on with execution
-		app.Program.SendColor(cErr.ErrorMessage, "red")
-		logs.SendApplicationLog(errors.New(cErr.ErrorMessage), errorSource, app.LicenseKey)
-		time.Sleep(retryDelay)
-		return false
-	case fix.ConnectionError: //carry on with execution
-		app.Program.SendColor("error sending message to API, retrying", "red")
-		time.Sleep(retryDelay)
-		return false
-	case fix.CtraderConnectionError:
-		app.Program.SendColor("error sending message to FIX, retrying", "red")
-		time.Sleep(retryDelay)
-		return false
-	case fix.UserDataError: //exit
-		app.Program.SendColor(fmt.Sprintf("unexpected error occurred, exiting: %s", cErr.ErrorMessage), "red")
-		return true
-	case fix.ProgramError: //exit
-		app.Program.SendColor("unexpected error occurred, exiting", "red")
-		logs.SendApplicationLog(errors.New(cErr.ErrorMessage), errorSource, app.LicenseKey)
-		return true
-	default: //exit
-		app.Program.SendColor("unexpected error occurred, exiting", "red")
-		logs.SendApplicationLog(errors.New(cErr.ErrorMessage), errorSource, app.LicenseKey)
-		return true
-	}
+func SendError(err error, license string) {
+	logs.SendApplicationLog(err, license)
 }
 
 func contains(slice []string, item string) bool {
@@ -75,3 +45,36 @@ func roundFloat(val float64) string {
 
 	return str
 }
+
+/*
+
+{
+    "positionId": 55742252,
+    "positionStatus": 1,
+    "tradeSide": 2,
+    "symbol": {
+        "symbolName": "GBPJPY",
+        "digits": 3,
+        "pipPosition": 2,
+        "symbolId": 7,
+        "description": "Great Britain Pound vs Japanese Yen"
+    },
+    "volume": 2000000,
+    "entryPrice": 186.347,
+    "openTimestamp": 1692295096822,
+    "utcLastUpdateTimestamp": 1692305940442,
+    "commission": -106,
+    "swap": -375,
+    "marginRate": 1.1729654913552443,
+    "profit": 6700,
+    "profitInPips": 53.1,
+    "currentPrice": 185.816,
+    "channel": "FIX",
+    "mirroringCommission": 0,
+    "usedMargin": 23459,
+    "introducingBrokerCommission": 0,
+    "moneyDigits": 2,
+    "pnlConversionFee": 0
+}
+
+*/

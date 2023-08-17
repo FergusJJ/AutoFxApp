@@ -1,35 +1,27 @@
 package api
 
 import (
-	"errors"
 	"fmt"
-	"reflect"
-
-	"github.com/valyala/fasthttp"
 )
+
+type ApiErrorType int
+
+const (
+	ApiConnectionError    ApiErrorType = 0
+	ApiAuthorizationError ApiErrorType = 1
+	ApiServerError        ApiErrorType = 2
+	ApiCredentialsError   ApiErrorType = 3
+	ApiResponseError      ApiErrorType = 4
+	ApiResponseCodeError  ApiErrorType = 5
+)
+
+type ApiError struct {
+	ShouldExit   bool
+	ErrorType    ApiErrorType
+	UserMessage  string
+	ErrorMessage error
+}
 
 func errorValidatingLicense(status int, message string) error {
 	return fmt.Errorf("%d - %s", status, message)
-}
-
-func httpConnError(err error) (string, bool) {
-	var (
-		errName string
-		known   = true
-	)
-
-	switch {
-	case errors.Is(err, fasthttp.ErrTimeout):
-		errName = "timeout"
-	case errors.Is(err, fasthttp.ErrNoFreeConns):
-		errName = "conn_limit"
-	case errors.Is(err, fasthttp.ErrConnectionClosed):
-		errName = "conn_close"
-	case reflect.TypeOf(err).String() == "*net.OpError":
-		errName = "timeout"
-	default:
-		known = false
-	}
-
-	return errName, known
 }

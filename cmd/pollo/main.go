@@ -6,6 +6,7 @@ import (
 	"os"
 	"pollo/config"
 	"pollo/internal/app"
+	"pollo/internal/logs"
 	"pollo/pkg/api"
 	"pollo/pkg/fix"
 	"time"
@@ -15,8 +16,8 @@ import (
 )
 
 /*
-TODO: Update table properly, add fields
-TODO: Calculate the price
+Make sure that if there is an interruption in network connection, to exit, will probably be detected by
+Websocket api monitor thingy, this will mean that it is less likely to have to retry ctrader messages due to  interruptions
 
 */
 
@@ -48,6 +49,8 @@ func start() (func(), error) {
 	go func() {
 		defer close(done)
 		app.MainLoop()
+		time.Sleep(10 * time.Second)
+		//need some sort of pause here on the ui, block until the user exits
 		app.Program.Program.Send(tea.QuitMsg{})
 	}()
 	errChan <- func() error {
@@ -134,13 +137,30 @@ func initialiseProgram() (*app.FxApp, func(), error) {
 	log.Println("license verified")
 	App.ApiSession.Cid = cid
 	App.ApiSession.LicenseKey = App.LicenseKey
-	err = App.ApiSession.FetchApiAuth()
-	if err != nil {
+	var apiErr *api.ApiError
+	var deadline = time.Now().UnixMilli() + 600000
+	for time.Now().UnixMilli() < deadline {
+		apiErr = App.ApiSession.FetchApiAuth()
+		if apiErr == nil {
+			break
+		}
+		if apiErr.ShouldExit {
+			logs.SendApplicationLog(apiErr.ErrorMessage, App.LicenseKey)
+			return nil, func() {
+				App.CloseExistingConnections()
+				log.Println("closed existing connections")
+			}, err
+		}
+		log.Println(apiErr.UserMessage)
+		time.Sleep(10 * time.Second)
+	}
+	if apiErr != nil {
 		return nil, func() {
 			App.CloseExistingConnections()
 			log.Println("closed existing connections")
 		}, err
 	}
+
 	log.Println("session authorised")
 
 	apiConn, err := api.CreateApiConnection(App.ApiSession.Cid, pools)

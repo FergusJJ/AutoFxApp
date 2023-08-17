@@ -9,12 +9,17 @@ import (
 )
 
 // get access & refresh tokens
-func (s *ApiSession) FetchApiAuth() error {
+func (s *ApiSession) FetchApiAuth() *ApiError {
 
 	var apiAuthResponseBody = &apiAuthResponse{}
 	apiAddress, err := config.Config("API_ADDRESS")
 	if err != nil {
-		return err
+		return &ApiError{
+			ErrorType:    ApiCredentialsError,
+			ShouldExit:   true,
+			UserMessage:  "An unexpected error occurred, please try again later",
+			ErrorMessage: err,
+		}
 	}
 	requestUri := fmt.Sprintf("http://%s/api/auth/new?license=%s", apiAddress, s.LicenseKey)
 	req := fasthttp.AcquireRequest()
@@ -25,35 +30,65 @@ func (s *ApiSession) FetchApiAuth() error {
 	err = fasthttp.Do(req, resp)
 	fasthttp.ReleaseRequest(req)
 	if err != nil {
-		return err
+		return &ApiError{
+			ErrorType:    ApiConnectionError,
+			ShouldExit:   false,
+			UserMessage:  "An error ocurred whilst getting api auth",
+			ErrorMessage: err,
+		}
 	}
 	defer fasthttp.ReleaseResponse(resp)
 	switch resp.StatusCode() {
 	case fasthttp.StatusInternalServerError:
-		return fmt.Errorf("internal server error")
+		return &ApiError{
+			ErrorType:    ApiServerError,
+			ShouldExit:   true,
+			UserMessage:  "An unexpected error occurred, please try again later",
+			ErrorMessage: fmt.Errorf("internal server error"),
+		}
 	case fasthttp.StatusBadRequest:
-		return fmt.Errorf("bad request")
+		return &ApiError{
+			ErrorType:    ApiResponseCodeError,
+			ShouldExit:   true,
+			UserMessage:  "An error ocurred whilst authorizing session",
+			ErrorMessage: fmt.Errorf("got status 400 authorizing session"),
+		}
 	case fasthttp.StatusOK:
 		if err := json.Unmarshal(resp.Body(), apiAuthResponseBody); err != nil {
-			return err
+			return &ApiError{
+				ErrorType:    ApiResponseError,
+				ShouldExit:   true,
+				UserMessage:  "An error ocurred whilst authorizing session",
+				ErrorMessage: err,
+			}
 		}
 		s.accessToken = apiAuthResponseBody.AccessToken
 		s.refreshToken = apiAuthResponseBody.RefreshToken
+		return nil
 	default:
-		return fmt.Errorf("status code fallthrough: %d", resp.StatusCode())
+		return &ApiError{
+			ErrorType:    ApiResponseCodeError,
+			ShouldExit:   true,
+			UserMessage:  "An unexpected error occurred, please try again later",
+			ErrorMessage: fmt.Errorf("status code fallthrough: %d", resp.StatusCode()),
+		}
 	}
-	return nil
 }
 
 // if err != nil && err == "timeout" then retry, otherwise exit?
-func (s *ApiSession) RefreshApiAuth() error {
+func (s *ApiSession) RefreshApiAuth() *ApiError {
 	type refreshRequest struct {
 		RefreshToken string `json:"refreshToken"`
 	}
 	var apiAuthResponseBody = &apiAuthResponse{}
 	apiAddress, err := config.Config("API_ADDRESS")
 	if err != nil {
-		return err
+		return &ApiError{
+			ErrorType:    ApiCredentialsError,
+			ShouldExit:   true,
+			UserMessage:  "An unexpected error occurred, please try again later",
+			ErrorMessage: err,
+		}
 	}
 	requestBody := &refreshRequest{
 		RefreshToken: s.refreshToken,
@@ -70,31 +105,54 @@ func (s *ApiSession) RefreshApiAuth() error {
 	err = fasthttp.Do(req, resp)
 	fasthttp.ReleaseRequest(req)
 	if err != nil {
-		errName, known := httpConnError(err)
-		if known {
-			return fmt.Errorf(errName)
+		return &ApiError{
+			ErrorType:    ApiConnectionError,
+			ShouldExit:   false,
+			UserMessage:  "An error ocurred whilst refreshing api auth",
+			ErrorMessage: err,
 		}
-		return err
 	}
-	defer fasthttp.ReleaseResponse(resp)
-
 	defer fasthttp.ReleaseResponse(resp)
 	switch resp.StatusCode() {
 	case fasthttp.StatusInternalServerError:
-		return fmt.Errorf("internal server error")
+		return &ApiError{
+			ErrorType:    ApiServerError,
+			ShouldExit:   true,
+			UserMessage:  "An unexpected error occurred, please try again later",
+			ErrorMessage: fmt.Errorf("internal server error"),
+		}
 	case fasthttp.StatusBadRequest:
-		return fmt.Errorf("bad request")
+		return &ApiError{
+			ErrorType:    ApiResponseCodeError,
+			ShouldExit:   true,
+			UserMessage:  "An error ocurred whilst authorizing session",
+			ErrorMessage: fmt.Errorf("got status 400 authorizing session"),
+		}
 	case fasthttp.StatusUnauthorized: //shouldn't happen
-		return fmt.Errorf("unauthorized request")
+		return &ApiError{
+			ErrorType:    ApiResponseCodeError,
+			ShouldExit:   true,
+			UserMessage:  "An error ocurred whilst authorizing session",
+			ErrorMessage: fmt.Errorf("got status 401 authorizing session"),
+		}
 	case fasthttp.StatusOK:
 		if err := json.Unmarshal(resp.Body(), apiAuthResponseBody); err != nil {
-			return err
+			return &ApiError{
+				ErrorType:    ApiResponseError,
+				ShouldExit:   true,
+				UserMessage:  "An unexpected error occurred",
+				ErrorMessage: err,
+			}
 		}
 		s.accessToken = apiAuthResponseBody.AccessToken
 		s.refreshToken = apiAuthResponseBody.RefreshToken
 	default:
-		return fmt.Errorf("status code fallthrough: %d", resp.StatusCode())
+		return &ApiError{
+			ErrorType:    ApiResponseError,
+			ShouldExit:   true,
+			UserMessage:  "An unexpected error occurred",
+			ErrorMessage: fmt.Errorf("RefreshApiAuth status code fallthrough: %d", resp.StatusCode()),
+		}
 	}
-
 	return nil
 }

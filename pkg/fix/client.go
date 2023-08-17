@@ -7,7 +7,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -55,13 +54,10 @@ func (c *FixClient) RoundTrip(message string) ([]*FixResponse, error) {
 	defer c.mu.Unlock()
 	_, err := c.Send([]byte(message))
 	if err != nil {
-		log.Fatalf("send: %+v", err)
 		return nil, err
 	}
 	messages, err := c.Receive()
 	if err != nil {
-		log.Fatalf("receive: %+v", err)
-
 		return nil, err
 	}
 
@@ -69,8 +65,8 @@ func (c *FixClient) RoundTrip(message string) ([]*FixResponse, error) {
 	for _, msg := range messages {
 
 		respString := string(msg)
-		if !validateChecksum(respString) {
-			return nil, errors.New("invalid checksum")
+		if err = validateChecksum(respString); err != nil {
+			return nil, err
 		}
 		tmpResponse := newParseFixResponse(msg)
 		responses = append(responses, tmpResponse)
@@ -83,8 +79,6 @@ func (c *FixClient) RoundTrip(message string) ([]*FixResponse, error) {
 func (c *FixClient) ReRead() ([]*FixResponse, error) {
 	messages, err := c.Receive()
 	if err != nil {
-		log.Fatalf("receive: %+v", err)
-
 		return nil, err
 	}
 
@@ -92,8 +86,8 @@ func (c *FixClient) ReRead() ([]*FixResponse, error) {
 	for _, msg := range messages {
 
 		respString := string(msg)
-		if !validateChecksum(respString) {
-			return nil, errors.New("invalid checksum")
+		if err = validateChecksum(respString); err != nil {
+			return nil, err
 		}
 		tmpResponse := newParseFixResponse(msg)
 		responses = append(responses, tmpResponse)
@@ -141,8 +135,6 @@ func (c *FixClient) Receive() ([][]byte, error) {
 		n, err := c.reader.Read(buffer)
 		// n, err := c.conn.Read(buffer)
 		if err != nil {
-			log.Fatalf("read: %+v", err)
-
 			return nil, err
 		}
 		data = append(data, buffer[:n]...)
@@ -174,16 +166,6 @@ func (c *FixClient) Receive() ([][]byte, error) {
 			continue
 		}
 		return messages, nil
-
-		//end of new stuff
-
-		// 	if len(data) > 7 && bytes.Contains(data[len(data)-8:], []byte("10=")) {
-		// 		if bytes.HasSuffix(data, []byte("|")) {
-		// 			break
-		// 		}
-		// 	}
-		// }
-		// return data, nil
 	}
 }
 
@@ -203,23 +185,24 @@ func getTlsConfig(hostName string) *tls.Config {
 	return config
 }
 
-func validateChecksum(message string) bool {
+func validateChecksum(message string) error {
 	messageHeaderAndBody := message[:len(message)-7]
 	messageHeaderAndBody = strings.ReplaceAll(messageHeaderAndBody, "|", "\u0001")
 	lastTag := message[len(message)-7:]
 	parts := strings.Split(lastTag, "=")
 	if len(parts) != 2 {
-		log.Fatal("Invalid checksum format")
-		return false
+		return fmt.Errorf("invalid checksum tag format")
 	}
 	resChecksumStr := strings.TrimSuffix(parts[1], "\u0001")
 	resChecksum, err := strconv.Atoi(resChecksumStr)
 	if err != nil {
-		log.Fatal(err)
-		return false
+		return err
 	}
 	calcChecksum := calculateChecksum(messageHeaderAndBody)
-	return calcChecksum == resChecksum
+	if calcChecksum == resChecksum {
+		return nil
+	}
+	return fmt.Errorf("checksum error")
 }
 
 func newParseFixResponse(data []byte) *FixResponse {

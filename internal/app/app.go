@@ -19,81 +19,90 @@ const retryDelay = 5 * time.Second
 // going to have to log errors here
 func (app *FxApp) MainLoop() {
 	app.Program.SendColor("Logging in to ctrader", "yellow")
-	var messageFails int = 0
-	var tradeLoginFinished bool = false
-	var quoteLoginFinished bool = false
-	var fetchedStoragePositions bool = false
 	var gotInitialCtraderPositions bool = false
+	var maxRetries = 3
 
-	for !quoteLoginFinished {
-		fxErr := app.FxSession.CtraderLogin(app.FxUser, fix.QUOTE)
-		if fxErr != nil {
-			errSource := "MainLoop, app.FxSession.CtraderLogin() (QUOTE)"
-			if messageFails > 3 {
-				app.Program.SendColor("unexpected error occurred, exiting", "red")
-				logs.SendApplicationLog(fmt.Errorf(fxErr.ErrorMessage), errSource, app.LicenseKey)
-				return
-			}
-			exitApplication := app.HandleError(fxErr, errSource)
-			if exitApplication {
-				return
-			}
-			messageFails++
-			continue
+	var fxErr *fix.CtraderError
+	for tries := 0; tries < maxRetries; tries++ {
+		fxErr = app.FxSession.CtraderLogin(app.FxUser, fix.QUOTE)
+		if fxErr == nil {
+			break
 		}
-		quoteLoginFinished = true
-	}
-	messageFails = 0
-	for !tradeLoginFinished {
-		fxErr := app.FxSession.CtraderLogin(app.FxUser, fix.TRADE)
-		if fxErr != nil {
-			errSource := "MainLoop, app.FxSession.CtraderLogin() (TRADE)"
-			if messageFails > 3 {
-				app.Program.SendColor("unexpected error occurred, exiting", "red")
-				logs.SendApplicationLog(fmt.Errorf(fxErr.ErrorMessage), errSource, app.LicenseKey)
-				return
-			}
-			exitApplication := app.HandleError(fxErr, errSource)
-			if exitApplication {
-				return
-			}
-			messageFails++
-			continue
+		if fxErr.ShouldExit {
+			app.Program.SendColor(fxErr.UserMessage, "red")
+			logs.SendApplicationLog(fxErr.ErrorCause, app.LicenseKey)
+			return
 		}
-		tradeLoginFinished = true
+		app.Program.SendColor(fxErr.UserMessage, "yellow")
+		time.Sleep(retryDelay)
 	}
+	if fxErr != nil {
+		fxErr.ErrorCause = fmt.Errorf("failed after 3 retries: %v", fxErr.ErrorCause)
+		logs.SendApplicationLog(fxErr.ErrorCause, app.LicenseKey)
+		return
+	}
+
+	for tries := 0; tries < maxRetries; tries++ {
+		fxErr = app.FxSession.CtraderLogin(app.FxUser, fix.TRADE)
+		if fxErr == nil {
+			break
+		}
+		if fxErr.ShouldExit {
+			app.Program.SendColor(fxErr.UserMessage, "red")
+			logs.SendApplicationLog(fxErr.ErrorCause, app.LicenseKey)
+			return
+		}
+		app.Program.SendColor(fxErr.UserMessage, "yellow")
+		time.Sleep(retryDelay)
+	}
+	if fxErr != nil {
+		fxErr.ErrorCause = fmt.Errorf("failed after 3 retries: %v", fxErr.ErrorCause)
+		logs.SendApplicationLog(fxErr.ErrorCause, app.LicenseKey)
+		return
+	}
+
 	app.Program.SendColor("Logged in to ctrader", "green")
-	app.FxSession.LoggedIn = true
 
-	//might want to re-implement security list, as will need the symbol strings
-	// app.FxSession.GotSecurityList = true
-
+	var apiErr *api.ApiError
 	var storagePositions = []api.ApiStoredPosition{}
-	for !fetchedStoragePositions {
-		tmpStoragePositions, err := app.ApiSession.FetchPositions()
-		if err != nil {
-			errSource := "MainLoop, app.ApiSession.FetchPositions()"
-			if err.Error() == "unauthorized request" {
-				app.Program.SendColor(fmt.Sprintf("%s: reauthorizing session", err.Error()), "yellow")
-				refreshError := app.ApiSession.RefreshApiAuth()
-				app.Program.SendColor(fmt.Sprintf("%s: error reauthorizing session", refreshError.Error()), "red")
-				return
-			} else if err.Error() == "internal server error" {
-				app.Program.SendColor(fmt.Sprintf("%s: please try again later", err.Error()), "red")
-				return
-			}
-			fxErr := &fix.ErrorWithCause{
-				ErrorMessage: err.Error(),
-				ErrorCause:   fix.ProgramError,
-			}
-			exitApplication := app.HandleError(fxErr, errSource)
-			if exitApplication {
-				return
-			}
+	for tries := 0; tries < maxRetries; tries++ {
+		tmpStoragePositions, apiErr := app.ApiSession.FetchPositions()
+		if apiErr == nil {
+			storagePositions = tmpStoragePositions
+			break
 		}
-		fetchedStoragePositions = true
-		storagePositions = tmpStoragePositions
+		if apiErr.ShouldExit {
+			app.Program.SendColor(apiErr.UserMessage, "red")
+			logs.SendApplicationLog(apiErr.ErrorMessage, app.LicenseKey)
+			return
+		}
+		if apiErr.ErrorType == api.ApiConnectionError {
+			app.Program.SendColor(apiErr.UserMessage, "yellow")
+			time.Sleep(retryDelay)
+			continue
+		}
+		if apiErr.ErrorType == api.ApiAuthorizationError {
+			app.Program.SendColor(apiErr.UserMessage, "yellow")
+			apiErr = app.ApiSession.RefreshApiAuth()
+			if apiErr != nil {
+				if apiErr.ShouldExit {
+					app.Program.SendColor(apiErr.UserMessage, "red")
+					logs.SendApplicationLog(apiErr.ErrorMessage, app.LicenseKey)
+					return
+				}
+				//in case that gets connection error on reauth, just retry whole thing
+				app.Program.SendColor(apiErr.UserMessage, "yellow")
+			}
+			time.Sleep(retryDelay)
+			continue
+		}
 	}
+	if apiErr != nil {
+		apiErr.ErrorMessage = fmt.Errorf("failed after 3 retries: %v", fxErr.ErrorCause)
+		logs.SendApplicationLog(apiErr.ErrorMessage, app.LicenseKey)
+		return
+	}
+
 	app.UiPositionsDataMap = make(map[string]uiPositionData, 0)
 	app.FxSession.Positions = make(map[string]fix.Position, 0)
 	app.Program.SendColor(fmt.Sprintf("retrieved %d positions from storage", len(storagePositions)), "yellow")
@@ -102,22 +111,23 @@ func (app *FxApp) MainLoop() {
 	var tmpPIDCopyPIDMapping = make(map[string]string, 0)
 
 	for !gotInitialCtraderPositions {
-		positionInfo, fxErr := app.FxSession.CtraderRequestForPositions(app.FxUser)
-		if fxErr != nil {
-			errSource := "MainLoop, CtraderRequestForPositions()"
-			exitApplication := app.HandleError(fxErr, errSource)
-			if exitApplication {
+		positionInfo, ctErr := app.FxSession.CtraderRequestForPositions(app.FxUser)
+		if ctErr != nil {
+			if ctErr.ShouldExit {
+				app.Program.SendColor(ctErr.UserMessage, "red")
+				logs.SendApplicationLog(ctErr.ErrorCause, app.LicenseKey)
 				return
+			}
+			if ctErr.ErrorType == fix.CtraderConnectionError {
+				app.Program.Program.Send(ctErr.UserMessage)
+				time.Sleep(retryDelay)
+				continue
 			}
 		}
 		totalExpectedReports, err := strconv.Atoi(positionInfo[0].TotalNumPosReports)
 		if err != nil {
-			errSource := "MainLoop, TotalNumPosReports type casting"
-			fxErr := &fix.ErrorWithCause{
-				ErrorMessage: err.Error(),
-				ErrorCause:   fix.ProgramError,
-			}
-			app.HandleError(fxErr, errSource) //only one case here, so return every time
+			app.Program.SendColor("An unexpected error occurred", "red")
+			logs.SendApplicationLog(err, app.LicenseKey)
 			return
 		}
 
@@ -142,21 +152,42 @@ func (app *FxApp) MainLoop() {
 		for totalExpectedReports > len(positionInfoMap) {
 			rereadMessages, err := app.FxSession.TradeClient.ReRead()
 			if err != nil {
-				log.Fatal(err)
+				app.Program.SendColor("An unexpected error occurred", "red")
+				logs.SendApplicationLog(err, app.LicenseKey)
+				return
 			}
 			app.Program.SendColor(fmt.Sprintf("got %d/%d", len(positionInfoMap), totalExpectedReports), "green")
 			time.Sleep(100 * time.Millisecond)
 			for _, message := range rereadMessages {
-				//does not currently return an error so not gonna have proper handling rn
-				fxRes, err := fix.ParseFixResponse(message, fix.RequestForPositions)
-				if err != nil {
-					log.Fatalf("error getting positions: %+v", err)
+
+				fxRes, ctErr := fix.ParseFixResponse(message, fix.RequestForPositions)
+				if ctErr != nil {
+					if ctErr.ShouldExit {
+						app.Program.SendColor(ctErr.UserMessage, "red")
+						logs.SendApplicationLog(ctErr.ErrorCause, app.LicenseKey)
+						return
+					}
 				}
 				positionReport, ok := fxRes.(fix.PositionReport)
 				if !ok {
-					log.Fatalf("cannot cast %v to positionReport", fxRes)
-				}
 
+					rejectMsg, ok := fxRes.(fix.SessionRejectMessage)
+					if !ok {
+						ctErr := &fix.CtraderError{
+							UserMessage: "An unexpected error occurred",
+							ErrorType:   fix.CtraderLogicError,
+							ErrorCause:  fmt.Errorf("unable to convert interface to SessionRejectMessage"),
+							ShouldExit:  true,
+						}
+						app.Program.SendColor(ctErr.UserMessage, "red")
+						logs.SendApplicationLog(ctErr.ErrorCause, app.LicenseKey)
+						return
+					}
+					ctErr := fix.ErrorFromSessionReject(rejectMsg)
+					app.Program.SendColor(ctErr.UserMessage, "yellow")
+					logs.SendApplicationLog(ctErr.ErrorCause, app.LicenseKey)
+					return
+				}
 				if _, exists := positionInfoMap[positionReport.PosMaintRptID]; !exists {
 					positionInfoMap[positionReport.PosMaintRptID] = positionReport
 					if !contains(tmpSymbols, positionReport.Symbol) {
@@ -183,22 +214,26 @@ func (app *FxApp) MainLoop() {
 			}
 			volInt, err := strconv.ParseInt(vol, 10, 64)
 			if err != nil {
-				errSource := "MainLoop, ParseInt(vol)"
-				fxErr := &fix.ErrorWithCause{
-					ErrorMessage: err.Error(),
-					ErrorCause:   fix.ProgramError,
+				ctErr := &fix.CtraderError{
+					UserMessage: "An unexpected error occurred",
+					ErrorType:   fix.CtraderLogicError,
+					ErrorCause:  err,
+					ShouldExit:  true,
 				}
-				app.HandleError(fxErr, errSource)
+				app.Program.SendColor(ctErr.UserMessage, "red")
+				logs.SendApplicationLog(ctErr.ErrorCause, app.LicenseKey)
 				return
 			}
 			avgPx, err := strconv.ParseFloat(position.SettlPrice, 64)
 			if err != nil {
-				errSource := "MainLoop, ParseFloat(position.Settl)"
-				fxErr := &fix.ErrorWithCause{
-					ErrorMessage: err.Error(),
-					ErrorCause:   fix.ProgramError,
+				ctErr := &fix.CtraderError{
+					UserMessage: "An unexpected error occurred",
+					ErrorType:   fix.CtraderLogicError,
+					ErrorCause:  err,
+					ShouldExit:  true,
 				}
-				app.HandleError(fxErr, errSource)
+				app.Program.SendColor(ctErr.UserMessage, "red")
+				logs.SendApplicationLog(ctErr.ErrorCause, app.LicenseKey)
 				return
 			}
 			if _, exists := tmpPIDCopyPIDMapping[position.PosMaintRptID]; !exists {
@@ -213,15 +248,13 @@ func (app *FxApp) MainLoop() {
 				Volume:    volInt,
 				Timestamp: "",
 			}
-			//HERE
-			app.Program.SendColor(fmt.Sprintf("%s", app.FxSession.Positions[tmpPIDCopyPIDMapping[position.PosMaintRptID]]), "red")
-
 		}
 		gotInitialCtraderPositions = true
 
 	}
 
 	go app.ApiSession.ListenForMessages()
+	//Needs to add modify event, which will require additional data to be stored
 	for {
 		select {
 		case currentMessage := <-app.ApiSession.Client.CurrentMessage:
@@ -232,51 +265,60 @@ func (app *FxApp) MainLoop() {
 			}
 			switch newMessage.MessageType {
 			case "OPEN":
-				newPos, fxErr := app.OpenPosition(newMessage)
-				if fxErr != nil {
-					//if err is a ctraderConnectionError, change the order type to limit or something
-					errSource := "MainLoop, app.OpenPosition()"
-					app.HandleError(fxErr, errSource)
-
+				app.Program.SendColor(fmt.Sprintf("%+v", newMessage), "green")
+				//any non-fatal errors should be handled within the function, all errors at this point should quit
+				newPos, ctErr := app.OpenPosition(newMessage)
+				if ctErr != nil {
+					if ctErr.ShouldExit {
+						app.Program.SendColor(ctErr.UserMessage, "red")
+						logs.SendApplicationLog(ctErr.ErrorCause, app.LicenseKey)
+						return
+					}
+					logs.SendApplicationLog(fmt.Errorf("app.OpenPosition returned not-fatal error: %w", ctErr.ErrorCause), app.LicenseKey)
+					return
 				}
 				app.FxSession.Positions[newPos.CopyPID] = *newPos
 				apiPosition := api.ApiStoredPosition{
 					CopyPositionID: newPos.CopyPID,
 					PositionID:     newPos.PID,
 				}
-				// log.Fatal(apiPosition)
-				retries := 0
-				for retries < 1 {
-					err = app.ApiSession.StorePosition(apiPosition)
-					if err != nil {
-						errorSource := "MainLoop, app.ApiSession.StorePosition()"
-						switch err.Error() {
-						case "unauthorized request":
-							app.Program.SendColor(fmt.Sprintf("%s: reauthorizing session", err.Error()), "yellow")
-							refreshError := app.ApiSession.RefreshApiAuth()
-							if refreshError != nil {
-								app.Program.SendColor(fmt.Sprintf("%s: error reauthorizing session", refreshError.Error()), "red")
+				var apiErr *api.ApiError
+				for tries := 0; tries < maxRetries; tries++ {
+					apiErr = app.ApiSession.StorePosition(apiPosition)
+					if apiErr == nil {
+						break
+					}
+					if apiErr.ShouldExit {
+						app.Program.SendColor(apiErr.UserMessage, "red")
+						logs.SendApplicationLog(apiErr.ErrorMessage, app.LicenseKey)
+						return
+					}
+					if apiErr.ErrorType == api.ApiConnectionError {
+						app.Program.SendColor(apiErr.UserMessage, "yellow")
+						time.Sleep(retryDelay)
+						continue
+					}
+					if apiErr.ErrorType == api.ApiAuthorizationError {
+						app.Program.SendColor(apiErr.UserMessage, "yellow")
+						apiErr = app.ApiSession.RefreshApiAuth()
+						if apiErr != nil {
+							if apiErr.ShouldExit {
+								app.Program.SendColor(apiErr.UserMessage, "red")
+								logs.SendApplicationLog(apiErr.ErrorMessage, app.LicenseKey)
 								return
 							}
-							retries++
-							continue
-						case "internal server error": //if this is returned, should alredy know that api has issue
-							app.Program.SendColor(fmt.Sprintf("%s: please try again later", err.Error()), "red")
-							return
-						default:
-							fxErr := &fix.ErrorWithCause{
-								ErrorMessage: err.Error(),
-								ErrorCause:   fix.ProgramError,
-							}
-							app.HandleError(fxErr, errorSource)
-							//always program error so return
-							return
+							//in case that gets connection error on reauth, just retry whole thing
+							app.Program.SendColor(apiErr.UserMessage, "yellow")
 						}
+						time.Sleep(retryDelay)
+						continue
 					}
-					break
 				}
-
-				//
+				if apiErr != nil {
+					apiErr.ErrorMessage = fmt.Errorf("failed after 3 retries: %v", fxErr.ErrorCause)
+					logs.SendApplicationLog(apiErr.ErrorMessage, app.LicenseKey)
+					return
+				}
 				symbol := fmt.Sprint(newMessage.SymbolID)
 				app.Program.SendColor("creating new marketData subscription", "yellow")
 				app.FxSession.NewMarketDataSubscription(symbol)
@@ -284,18 +326,54 @@ func (app *FxApp) MainLoop() {
 				app.Program.SendColor(fmt.Sprintf("closing position %s", newMessage.CopyPID), "green")
 				// newMessage.CopyPID
 				positionToClose := app.FxSession.Positions[newMessage.CopyPID]
-				fxErr := app.ClosePosition(positionToClose)
-				if err != nil {
-					log.Fatal(fxErr)
+				ctErr := app.ClosePosition(positionToClose)
+				if ctErr != nil {
+					if ctErr.ShouldExit {
+						app.Program.SendColor(ctErr.UserMessage, "red")
+						logs.SendApplicationLog(ctErr.ErrorCause, app.LicenseKey)
+						return
+					}
+					logs.SendApplicationLog(fmt.Errorf("app.OpenPosition returned not-fatal error: %w", ctErr.ErrorCause), app.LicenseKey)
+					return
 				}
-				// pid, err := app.ClosePosition(newMessage)
-				// if err != nil {
-				// 	app.Program.SendColor(fmt.Sprint("close position error: ", err)))
-				// 	continue
-				// }
+				var apiErr *api.ApiError
+				for tries := 0; tries < maxRetries; tries++ {
 
-				//if successful, check remove subscription
-				//but remove position from Positions first
+					apiErr = app.ApiSession.RemovePosition(positionToClose.PID)
+					if apiErr == nil {
+						break
+					}
+					if apiErr.ShouldExit {
+						app.Program.SendColor(apiErr.UserMessage, "red")
+						logs.SendApplicationLog(apiErr.ErrorMessage, app.LicenseKey)
+						return
+					}
+					if apiErr.ErrorType == api.ApiConnectionError {
+						app.Program.SendColor(apiErr.UserMessage, "yellow")
+						time.Sleep(retryDelay)
+						continue
+					}
+					if apiErr.ErrorType == api.ApiAuthorizationError {
+						app.Program.SendColor(apiErr.UserMessage, "yellow")
+						apiErr = app.ApiSession.RefreshApiAuth()
+						if apiErr != nil {
+							if apiErr.ShouldExit {
+								app.Program.SendColor(apiErr.UserMessage, "red")
+								logs.SendApplicationLog(apiErr.ErrorMessage, app.LicenseKey)
+								return
+							}
+							//in case that gets connection error on reauth, just retry whole thing
+							app.Program.SendColor(apiErr.UserMessage, "yellow")
+						}
+						time.Sleep(retryDelay)
+						continue
+					}
+				}
+				if apiErr != nil {
+					apiErr.ErrorMessage = fmt.Errorf("failed after 3 retries: %v", fxErr.ErrorCause)
+					logs.SendApplicationLog(apiErr.ErrorMessage, app.LicenseKey)
+					return
+				}
 
 				symbol := fmt.Sprint(newMessage.SymbolID)
 				app.FxSession.CheckRemoveMarketDataSubscription(symbol)
@@ -311,14 +389,16 @@ func (app *FxApp) MainLoop() {
 			for _, subscription := range app.FxSession.MarketDataSubscriptions {
 				marketDataSnapshot, fxErr := app.FxSession.CtraderMarketDataRequest(app.FxUser, *subscription)
 				if fxErr != nil {
-					if strings.Contains(fxErr.ErrorMessage, "ALREADY_SUBSCRIBED") {
+					if strings.Contains(fxErr.ErrorCause.Error(), "ALREADY_SUBSCRIBED") {
 						continue
 					}
-					errSource := "MainLoop, switch default. CtraderMarketDataRequest"
-					exitApplication := app.HandleError(fxErr, errSource)
-					if exitApplication {
+					if fxErr.ShouldExit {
+						app.Program.SendColor(apiErr.UserMessage, "red")
+						logs.SendApplicationLog(apiErr.ErrorMessage, app.LicenseKey)
 						return
 					}
+					app.Program.SendColor(apiErr.UserMessage, "yellow")
+
 				}
 				marketDataSnapshots = append(marketDataSnapshots, marketDataSnapshot...)
 			}
@@ -365,7 +445,7 @@ func (app *FxApp) MainLoop() {
 			}
 			app.Program.Program.Send(PositionMessageSlice(app.UiPositionsDataMap))
 
-			time.Sleep(10 * time.Second)
+			time.Sleep(2 * time.Second)
 			continue
 		}
 	}

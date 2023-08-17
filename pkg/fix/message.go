@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -211,7 +210,7 @@ func GetUUID() string {
 	return uuid.New().String()
 }
 
-func ParseFixResponse(resp *FixResponse, reqType CtraderSessionMessageType) (interface{}, error) {
+func ParseFixResponse(resp *FixResponse, reqType CtraderSessionMessageType) (interface{}, *CtraderError) {
 	if resp.MsgType == "3" {
 		//session level violation, just want the reason in this case.
 		var sessionRejectMessageMapping = map[string]string{}
@@ -221,14 +220,24 @@ func ParseFixResponse(resp *FixResponse, reqType CtraderSessionMessageType) (int
 		}
 		jsonData, err := json.Marshal(sessionRejectMessageMapping)
 		if err != nil {
-			log.Fatal(err)
+			return false, &CtraderError{
+				UserMessage: "An unexpected error occurred",
+				ErrorCause:  err,
+				ErrorType:   CtraderLogicError,
+				ShouldExit:  true,
+			}
+
 		}
 		err = json.Unmarshal(jsonData, &sessionRejectMessage)
 		if err != nil {
-			log.Fatal(err)
+			return false, &CtraderError{
+				UserMessage: "An unexpected error occurred",
+				ErrorCause:  err,
+				ErrorType:   CtraderLogicError,
+				ShouldExit:  true,
+			}
 		}
-		log.Fatalf("%+v", sessionRejectMessage)
-		return sessionRejectMessage, fmt.Errorf("session reject message: %s", sessionRejectMessage.Text)
+		return sessionRejectMessage, nil
 	}
 	switch reqType {
 	case Logon, Logout:
@@ -239,16 +248,37 @@ func ParseFixResponse(resp *FixResponse, reqType CtraderSessionMessageType) (int
 			if reqType == Logon {
 				reason, ok := resp.Body[58]
 				if !ok {
-					log.Fatal("no reason tag for failed login")
+					return false, &CtraderError{
+						UserMessage: reason,
+						ErrorCause:  fmt.Errorf("no reason tag for failed login, body: %+v", resp.Body),
+						ErrorType:   CtraderLogicError,
+						ShouldExit:  true,
+					}
 				}
 				if strings.Contains(reason, "RET_INVALID_DATA") {
-					reason = "invalid user data"
+					reason = "error logging in, invalid user data"
+					return false, &CtraderError{
+						UserMessage: reason,
+						ErrorCause:  fmt.Errorf("login failure reason: %s", reason),
+						ErrorType:   CtraderUserDataError,
+						ShouldExit:  true,
+					}
 				}
-				return false, fmt.Errorf("unable to login, %s", reason)
+				return false, &CtraderError{
+					UserMessage: "An unexpected error occurred",
+					ErrorCause:  fmt.Errorf("login failure reason: %s", reason),
+					ErrorType:   CtraderLogicError,
+					ShouldExit:  true,
+				}
 			}
 			return false, nil
 		default:
-			log.Fatalf("unhandled resp.MsgType %s. reqType: %d", resp.MsgType, reqType)
+			return false, &CtraderError{
+				UserMessage: "An unexpected error occurred",
+				ErrorCause:  fmt.Errorf("unhandled resp.MsgType %s. reqType: %d", resp.MsgType, reqType),
+				ErrorType:   CtraderLogicError,
+				ShouldExit:  true,
+			}
 		}
 	case MarketDataRequest:
 		switch resp.MsgType {
@@ -260,11 +290,21 @@ func ParseFixResponse(resp *FixResponse, reqType CtraderSessionMessageType) (int
 			}
 			jsonData, err := json.Marshal(marketDataSnapshotMapping)
 			if err != nil {
-				log.Fatal(err)
+				return false, &CtraderError{
+					UserMessage: "An unexpected error occurred",
+					ErrorCause:  err,
+					ErrorType:   CtraderLogicError,
+					ShouldExit:  true,
+				}
 			}
 			err = json.Unmarshal(jsonData, &marketDataSnapshot)
 			if err != nil {
-				log.Fatal(err)
+				return false, &CtraderError{
+					UserMessage: "An unexpected error occurred",
+					ErrorCause:  err,
+					ErrorType:   CtraderLogicError,
+					ShouldExit:  true,
+				}
 			}
 			return marketDataSnapshot, nil
 
@@ -276,11 +316,21 @@ func ParseFixResponse(resp *FixResponse, reqType CtraderSessionMessageType) (int
 			}
 			jsonData, err := json.Marshal(marketDataIncrementalRefreshMapping)
 			if err != nil {
-				log.Fatal(err)
+				return false, &CtraderError{
+					UserMessage: "An unexpected error occurred",
+					ErrorCause:  err,
+					ErrorType:   CtraderLogicError,
+					ShouldExit:  true,
+				}
 			}
 			err = json.Unmarshal(jsonData, &marketDataIncrementalRefresh)
 			if err != nil {
-				log.Fatal(err)
+				return false, &CtraderError{
+					UserMessage: "An unexpected error occurred",
+					ErrorCause:  err,
+					ErrorType:   CtraderLogicError,
+					ShouldExit:  true,
+				}
 			}
 			return marketDataIncrementalRefresh, nil
 		case "Y": //market data request reject (just bad symbol, or message)
@@ -291,13 +341,23 @@ func ParseFixResponse(resp *FixResponse, reqType CtraderSessionMessageType) (int
 			}
 			jsonData, err := json.Marshal(marketDataRequestRejectMapping)
 			if err != nil {
-				log.Fatal(err)
+				return false, &CtraderError{
+					UserMessage: "An unexpected error occurred",
+					ErrorCause:  err,
+					ErrorType:   CtraderLogicError,
+					ShouldExit:  true,
+				}
 			}
 			err = json.Unmarshal(jsonData, &marketDataRequestReject)
 			if err != nil {
-				log.Fatal(err)
+				return false, &CtraderError{
+					UserMessage: "An unexpected error occurred",
+					ErrorCause:  err,
+					ErrorType:   CtraderLogicError,
+					ShouldExit:  true,
+				}
 			}
-			return marketDataRequestReject, fmt.Errorf("market data request reject")
+			return marketDataRequestReject, nil
 		case "j":
 			var businessMessageRejectMapping = map[string]string{}
 			var businessMessageReject BusinessMessageReject
@@ -306,15 +366,30 @@ func ParseFixResponse(resp *FixResponse, reqType CtraderSessionMessageType) (int
 			}
 			jsonData, err := json.Marshal(businessMessageRejectMapping)
 			if err != nil {
-				log.Fatal(err)
+				return false, &CtraderError{
+					UserMessage: "An unexpected error occurred",
+					ErrorCause:  err,
+					ErrorType:   CtraderLogicError,
+					ShouldExit:  true,
+				}
 			}
 			err = json.Unmarshal(jsonData, &businessMessageReject)
 			if err != nil {
-				log.Fatal(err)
+				return false, &CtraderError{
+					UserMessage: "An unexpected error occurred",
+					ErrorCause:  err,
+					ErrorType:   CtraderLogicError,
+					ShouldExit:  true,
+				}
 			}
-			return businessMessageReject, fmt.Errorf("business reject: %s", businessMessageReject.Text)
+			return businessMessageReject, nil
 		default:
-			log.Fatalf("unhandled resp.MsgType %s. reqType: %d", resp.MsgType, reqType)
+			return false, &CtraderError{
+				UserMessage: "An unexpected error occurred",
+				ErrorCause:  fmt.Errorf("unhandled resp.MsgType %s. reqType: %d", resp.MsgType, reqType),
+				ErrorType:   CtraderLogicError,
+				ShouldExit:  true,
+			}
 		}
 	case NewOrderSingle, OrderStatusRequest, OrderMassStatusRequest, RequestForCancelOrder:
 		switch resp.MsgType {
@@ -327,11 +402,21 @@ func ParseFixResponse(resp *FixResponse, reqType CtraderSessionMessageType) (int
 			}
 			jsonData, err := json.Marshal(executionReportMapping)
 			if err != nil {
-				log.Fatal(err)
+				return false, &CtraderError{
+					UserMessage: "An unexpected error occurred",
+					ErrorCause:  err,
+					ErrorType:   CtraderLogicError,
+					ShouldExit:  true,
+				}
 			}
 			err = json.Unmarshal(jsonData, &executionReport)
 			if err != nil {
-				log.Fatal(err)
+				return false, &CtraderError{
+					UserMessage: "An unexpected error occurred",
+					ErrorCause:  err,
+					ErrorType:   CtraderLogicError,
+					ShouldExit:  true,
+				}
 			}
 			return executionReport, nil
 		case "j": //fail
@@ -342,15 +427,30 @@ func ParseFixResponse(resp *FixResponse, reqType CtraderSessionMessageType) (int
 			}
 			jsonData, err := json.Marshal(businessMessageRejectMapping)
 			if err != nil {
-				log.Fatal(err)
+				return false, &CtraderError{
+					UserMessage: "An unexpected error occurred",
+					ErrorCause:  err,
+					ErrorType:   CtraderLogicError,
+					ShouldExit:  true,
+				}
 			}
 			err = json.Unmarshal(jsonData, &businessMessageReject)
 			if err != nil {
-				log.Fatal(err)
+				return false, &CtraderError{
+					UserMessage: "An unexpected error occurred",
+					ErrorCause:  err,
+					ErrorType:   CtraderLogicError,
+					ShouldExit:  true,
+				}
 			}
-			return businessMessageReject, fmt.Errorf("business reject") // will have to check for this error when "j" possible and print specific info
+			return businessMessageReject, nil
 		default:
-			log.Fatalf("unhandled resp.MsgType %s. reqType: %d", resp.MsgType, reqType)
+			return false, &CtraderError{
+				UserMessage: "An unexpected error occurred",
+				ErrorCause:  fmt.Errorf("unhandled resp.MsgType %s. reqType: %d", resp.MsgType, reqType),
+				ErrorType:   CtraderLogicError,
+				ShouldExit:  true,
+			}
 		}
 	case RequestForPositions:
 		switch resp.MsgType {
@@ -362,20 +462,39 @@ func ParseFixResponse(resp *FixResponse, reqType CtraderSessionMessageType) (int
 			}
 			jsonData, err := json.Marshal(positionReportMapping)
 			if err != nil {
-				log.Fatal(err)
+				return false, &CtraderError{
+					UserMessage: "An unexpected error occurred",
+					ErrorCause:  err,
+					ErrorType:   CtraderLogicError,
+					ShouldExit:  true,
+				}
 			}
 			err = json.Unmarshal(jsonData, &positionReport)
 			if err != nil {
-				log.Fatal(err)
+				return false, &CtraderError{
+					UserMessage: "An unexpected error occurred",
+					ErrorCause:  err,
+					ErrorType:   CtraderLogicError,
+					ShouldExit:  true,
+				}
 			}
 			return positionReport, nil
 		default:
-			log.Fatalf("unhandled resp.MsgType %s. reqType: %d", resp.MsgType, reqType)
+			return false, &CtraderError{
+				UserMessage: "An unexpected error occurred",
+				ErrorCause:  fmt.Errorf("unhandled resp.MsgType %s. reqType: %d", resp.MsgType, reqType),
+				ErrorType:   CtraderLogicError,
+				ShouldExit:  true,
+			}
 		}
 	default:
-		log.Fatalf("no case specified for reqType: %+v\nfix response:\n%+v", reqType, resp)
+		return false, &CtraderError{
+			UserMessage: "An unexpected error occurred",
+			ErrorCause:  fmt.Errorf("no case specified for reqType: %+v\nfix response:\n%+v", reqType, resp),
+			ErrorType:   CtraderLogicError,
+			ShouldExit:  true,
+		}
 	}
-	return nil, nil
 }
 
 /*

@@ -10,8 +10,10 @@ import (
 	"time"
 )
 
+var orderRetryDelay time.Duration = 3 * time.Second
+
 // might want to change from OrderType market, to Limit, user may specify limit
-func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (*fix.Position, *fix.ErrorWithCause) {
+func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (*fix.Position, *fix.CtraderError) {
 	//get oid
 	orderData := fix.OrderData{
 		PosMaintRptID: "",
@@ -20,18 +22,26 @@ func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (*fix.Positi
 		Direction:     strings.ToLower(copyPosition.Direction),
 		OrderType:     "market",
 	}
-
-	executionReport, fxErr := app.FxSession.CtraderNewOrderSingle(app.FxUser, orderData)
-	if fxErr != nil {
-		switch fxErr.ErrorCause {
-		case fix.ProgramError:
-		case fix.ConnectionError:
-			app.Program.SendColor(fmt.Sprintf("client error whilst attempting to open position: %s", fxErr.ErrorMessage), "red")
-		case fix.MarketError:
-			app.Program.SendColor(fmt.Sprintf(fxErr.ErrorMessage), "red")
+	maxRetries := 3
+	var executionReport *fix.ExecutionReport
+	var ctErr *fix.CtraderError
+	for tries := 0; tries < maxRetries; tries++ {
+		executionReport, ctErr = app.FxSession.CtraderNewOrderSingle(app.FxUser, orderData)
+		if ctErr == nil {
+			break
 		}
-		return nil, fxErr
+		if ctErr.ShouldExit {
+			return nil, ctErr
+		}
+		app.Program.SendColor(ctErr.UserMessage, "yellow")
+		time.Sleep(retryDelay)
 	}
+	if ctErr != nil {
+		ctErr.ShouldExit = true
+		ctErr.ErrorCause = fmt.Errorf("failed after 3 retries: %v", ctErr.ErrorCause)
+		return nil, ctErr
+	}
+
 	var pollTimeout = time.Millisecond * 1500
 	// The expected status
 	for {
@@ -39,6 +49,7 @@ func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (*fix.Positi
 		case "0":
 			app.Program.SendColor("order in progress...", "yellow")
 			time.Sleep(pollTimeout)
+
 		case "4":
 			app.Program.SendColor("order was cancelled", "red")
 			return nil, nil
@@ -50,17 +61,33 @@ func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (*fix.Positi
 			return nil, nil
 		case "F":
 			app.Program.SendColor("order was executed", "green")
-			if executionReport.OrdStatus == "1" {
+			if executionReport.OrdStatus == "1" { //will need to read the next message as will get OrdStatus = 1 & OrdStatus = 4
 				app.Program.SendColor("order could only be partially filled", "yellow")
 			}
 			avgPx, err := strconv.ParseFloat(executionReport.AvgPx, 64)
 			if err != nil {
-				// nil, nil
-				log.Fatalf("Error parsing float from :%s", executionReport.AvgPx)
+				//needs to at least store position because it will've been executed
+				return &fix.Position{
+						PID:     executionReport.PosMaintRptID,
+						CopyPID: copyPosition.CopyPID,
+					}, &fix.CtraderError{
+						UserMessage: fmt.Sprintf("An unexpected error occurred parsing your position: %s", executionReport.PosMaintRptID),
+						ErrorCause:  err,
+						ShouldExit:  false,
+						ErrorType:   fix.CtraderLogicError,
+					}
 			}
 			volumeInt, err := strconv.ParseInt(executionReport.CumQty, 10, 64)
 			if err != nil {
-				log.Fatalf("Error parsing int from :%s", executionReport.CumQty)
+				return &fix.Position{
+						PID:     executionReport.PosMaintRptID,
+						CopyPID: copyPosition.CopyPID,
+					}, &fix.CtraderError{
+						UserMessage: fmt.Sprintf("An unexpected error occurred parsing your position: %s", executionReport.PosMaintRptID),
+						ErrorCause:  err,
+						ShouldExit:  false,
+						ErrorType:   fix.CtraderLogicError,
+					}
 			}
 			positionData := &fix.Position{
 				PID:       executionReport.PosMaintRptID,
@@ -71,9 +98,7 @@ func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (*fix.Positi
 				Volume:    volumeInt,
 				Timestamp: executionReport.TransactTime,
 			}
-
 			return positionData, nil
-
 		//this shouldn't happen yet
 		//if/when support added, will just need to update the volume of the position i think
 		case "5":
@@ -84,22 +109,27 @@ func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (*fix.Positi
 			log.Fatalf("in OpenPosition ExecType: %+v", executionReport)
 		}
 		clOrdID := executionReport.ClOrdID
-		executionReport, fxErr = app.FxSession.CtraderOrderStatus(app.FxUser, clOrdID)
-		if fxErr != nil {
-			switch fxErr.ErrorCause {
-			case fix.ProgramError:
-				log.Fatalf("program error: %s", fxErr.ErrorMessage)
-			case fix.ConnectionError:
-				app.Program.SendColor(fmt.Sprintf("client error whilst polling order status: %s", fxErr.ErrorMessage), "red")
-			case fix.MarketError:
-				app.Program.SendColor(fmt.Sprintf(fxErr.ErrorMessage), "red")
+
+		for tries := 0; tries < maxRetries; tries++ {
+			executionReport, ctErr = app.FxSession.CtraderOrderStatus(app.FxUser, clOrdID)
+			if ctErr == nil {
+				break
 			}
-			return nil, fxErr
+			if ctErr.ShouldExit {
+				return nil, ctErr
+			}
+			app.Program.SendColor(ctErr.UserMessage, "yellow")
+			time.Sleep(retryDelay)
+		}
+		if ctErr != nil {
+			ctErr.ShouldExit = true
+			ctErr.ErrorCause = fmt.Errorf("failed after 3 retries: %v", ctErr.ErrorCause)
+			return nil, ctErr
 		}
 	}
 }
 
-func (app *FxApp) ClosePosition(closePosition fix.Position) *fix.ErrorWithCause {
+func (app *FxApp) ClosePosition(closePosition fix.Position) *fix.CtraderError {
 	direction := "buy"
 	//on netted accounts, closing an order means opening the same order in the opposite direction
 	if closePosition.Side == "buy" {
@@ -112,19 +142,27 @@ func (app *FxApp) ClosePosition(closePosition fix.Position) *fix.ErrorWithCause 
 		Direction:     direction,
 		OrderType:     "market", //will prob always be market for close position
 	}
-	executionReport, fxErr := app.FxSession.CtraderNewOrderSingle(app.FxUser, orderData)
-	if fxErr != nil {
-		switch fxErr.ErrorCause {
-		case fix.ProgramError:
 
-			log.Fatalf("program error: %s", fxErr.ErrorMessage)
-		case fix.ConnectionError:
-			app.Program.SendColor(fmt.Sprintf("client error whilst attempting to open position: %s", fxErr.ErrorMessage), "red")
-		case fix.MarketError:
-			app.Program.SendColor(fmt.Sprintf(fxErr.ErrorMessage), "red")
+	maxRetries := 3
+	var executionReport *fix.ExecutionReport
+	var ctErr *fix.CtraderError
+	for tries := 0; tries < maxRetries; tries++ {
+		executionReport, ctErr = app.FxSession.CtraderNewOrderSingle(app.FxUser, orderData)
+		if ctErr == nil {
+			break
 		}
-		return fxErr
+		if ctErr.ShouldExit {
+			return ctErr
+		}
+		app.Program.SendColor(ctErr.UserMessage, "yellow")
+		time.Sleep(retryDelay)
 	}
+	if ctErr != nil {
+		ctErr.ShouldExit = true
+		ctErr.ErrorCause = fmt.Errorf("failed after 3 retries: %v", ctErr.ErrorCause)
+		return ctErr
+	}
+
 	var pollTimeout = time.Millisecond * 1500
 	// The expected status
 	for {
@@ -154,26 +192,30 @@ func (app *FxApp) ClosePosition(closePosition fix.Position) *fix.ErrorWithCause 
 			log.Fatalf("in OpenPosition ExecType: %+v", executionReport)
 		}
 		clOrdID := executionReport.ClOrdID
-		executionReport, fxErr = app.FxSession.CtraderOrderStatus(app.FxUser, clOrdID)
-		if fxErr != nil {
-			switch fxErr.ErrorCause {
-			case fix.ProgramError:
-				log.Fatalf("program error: %s", fxErr.ErrorMessage)
-			case fix.ConnectionError:
-				app.Program.SendColor(fmt.Sprintf("client error whilst polling order status: %s", fxErr.ErrorMessage), "red")
-			case fix.MarketError:
-				app.Program.SendColor(fmt.Sprintf(fxErr.ErrorMessage), "red")
+		for tries := 0; tries < maxRetries; tries++ {
+			executionReport, ctErr = app.FxSession.CtraderOrderStatus(app.FxUser, clOrdID)
+			if ctErr == nil {
+				break
 			}
-			return nil
+			if ctErr.ShouldExit {
+				return ctErr
+			}
+			app.Program.SendColor(ctErr.UserMessage, "yellow")
+			time.Sleep(retryDelay)
+		}
+		if ctErr != nil {
+			ctErr.ShouldExit = true
+			ctErr.ErrorCause = fmt.Errorf("failed after 3 retries: %v", ctErr.ErrorCause)
+			return ctErr
 		}
 	}
 }
 
-func (app *FxApp) FetchPositions() ([]string, *fix.ErrorWithCause) {
-	positionReports, fxErr := app.FxSession.CtraderRequestForPositions(app.FxUser)
-	if fxErr != nil {
+func (app *FxApp) FetchPositions() ([]string, *fix.CtraderError) {
+	positionReports, ctErr := app.FxSession.CtraderRequestForPositions(app.FxUser)
+	if ctErr != nil {
 		//log error to feed, don't update positions
-		return []string{}, fxErr
+		return []string{}, ctErr
 	}
 	//need to get a slice containing the position ids, with their volume, entry price, and symbol
 	positionReportString := ""

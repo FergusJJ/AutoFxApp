@@ -78,7 +78,8 @@ func (session *FxSession) NewMarketDataSubscription(symbol string) {
 
 // will just change to unsubscribe, remove from mapping once unsub message has been sent
 func (session *FxSession) RemoveMarketDataSubscription(symbol string) {
-	session.MarketDataSubscriptions[symbol].Action = "unsubscribe"
+	log.Fatal(session.MarketDataSubscriptions)
+	session.MarketDataSubscriptions[symbol].Action = "unsubscribe" //nil dereference
 }
 
 // if there are no positions with the symbol anymore, then remove market subscription
@@ -91,3 +92,7 @@ func (session *FxSession) CheckRemoveMarketDataSubscription(symbol string) {
 	session.RemoveMarketDataSubscription(symbol)
 	//
 }
+
+/*
+Not properly updating storage-positions-pool when position is closed
+*/

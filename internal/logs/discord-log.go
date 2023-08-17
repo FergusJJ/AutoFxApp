@@ -13,7 +13,7 @@ import (
 const maxRetries = 3
 const retryDelay = 5 * time.Second
 
-func SendApplicationLog(errToSend error, errSource, license string) {
+func SendApplicationLog(errToSend error, license string) {
 
 	webhookUri, err := config.Config("LOGGING_URL")
 	if err != nil {
@@ -38,10 +38,6 @@ func SendApplicationLog(errToSend error, errSource, license string) {
 						"name": "Error Type",
 						"value": "%s",
 						"inline": true
-					},
-					{
-						"name": "Source",
-						"value": "%s"
 					}
 				]
 			},
@@ -58,7 +54,7 @@ func SendApplicationLog(errToSend error, errSource, license string) {
 			}
 		],
 		"attachments": []
-	}`, errorMessage, errorType, errSource, license)
+	}`, errorMessage, errorType, license)
 	for i := 0; i < maxRetries; i++ {
 		req := fasthttp.AcquireRequest()
 		req.SetRequestURI(webhookUri)
