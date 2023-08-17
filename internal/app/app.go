@@ -325,6 +325,11 @@ func (app *FxApp) MainLoop() {
 			case "CLOSE":
 				app.Program.SendColor(fmt.Sprintf("closing position %s", newMessage.CopyPID), "green")
 				// newMessage.CopyPID
+				_, exists := app.FxSession.Positions[newMessage.CopyPID]
+				if !exists {
+					app.Program.SendColor("user doesn't have position", "green")
+					continue
+				}
 				positionToClose := app.FxSession.Positions[newMessage.CopyPID]
 				ctErr := app.ClosePosition(positionToClose)
 				if ctErr != nil {
