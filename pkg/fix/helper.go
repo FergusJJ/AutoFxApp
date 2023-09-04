@@ -78,7 +78,8 @@ func (session *FxSession) NewMarketDataSubscription(symbol string) {
 
 // will just change to unsubscribe, remove from mapping once unsub message has been sent
 func (session *FxSession) RemoveMarketDataSubscription(symbol string) {
-	log.Fatal(session.MarketDataSubscriptions)
+	// log.Print(symbol)
+	// log.Fatal(session.MarketDataSubscriptions)
 	session.MarketDataSubscriptions[symbol].Action = "unsubscribe" //nil dereference
 }
 
@@ -89,6 +90,7 @@ func (session *FxSession) CheckRemoveMarketDataSubscription(symbol string) {
 			return
 		}
 	}
+	//symbol is 0
 	session.RemoveMarketDataSubscription(symbol)
 	//
 }

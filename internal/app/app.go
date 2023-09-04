@@ -19,7 +19,6 @@ const retryDelay = 5 * time.Second
 // going to have to log errors here
 func (app *FxApp) MainLoop() {
 	app.Program.SendColor("Logging in to ctrader", "yellow")
-	var gotInitialCtraderPositions bool = false
 	var maxRetries = 3
 
 	var fxErr *fix.CtraderError
@@ -71,11 +70,13 @@ func (app *FxApp) MainLoop() {
 			storagePositions = tmpStoragePositions
 			break
 		}
+
 		if apiErr.ShouldExit {
 			app.Program.SendColor(apiErr.UserMessage, "red")
 			logs.SendApplicationLog(apiErr.ErrorMessage, app.LicenseKey)
 			return
 		}
+
 		if apiErr.ErrorType == api.ApiConnectionError {
 			app.Program.SendColor(apiErr.UserMessage, "yellow")
 			time.Sleep(retryDelay)
@@ -102,156 +103,44 @@ func (app *FxApp) MainLoop() {
 		logs.SendApplicationLog(apiErr.ErrorMessage, app.LicenseKey)
 		return
 	}
-
 	app.UiPositionsDataMap = make(map[string]uiPositionData, 0)
 	app.FxSession.Positions = make(map[string]fix.Position, 0)
-	app.Program.SendColor(fmt.Sprintf("retrieved %d positions from storage", len(storagePositions)), "yellow")
-	var tmpSymbols []string = make([]string, 0)
-	var positionInfoMap = make(map[string]fix.PositionReport, 0)
-	var tmpPIDCopyPIDMapping = make(map[string]string, 0)
 
-	for !gotInitialCtraderPositions {
-		positionInfo, ctErr := app.FxSession.CtraderRequestForPositions(app.FxUser)
-		if ctErr != nil {
-			if ctErr.ShouldExit {
-				app.Program.SendColor(ctErr.UserMessage, "red")
-				logs.SendApplicationLog(ctErr.ErrorCause, app.LicenseKey)
-				return
-			}
-			if ctErr.ErrorType == fix.CtraderConnectionError {
-				app.Program.Program.Send(ctErr.UserMessage)
-				time.Sleep(retryDelay)
-				continue
-			}
-		}
-		totalExpectedReports, err := strconv.Atoi(positionInfo[0].TotalNumPosReports)
+	var tmpSymbols []string = make([]string, 0)
+	for _, position := range storagePositions {
+		avgPx, err := strconv.ParseFloat(position.AveragePrice, 64)
 		if err != nil {
 			app.Program.SendColor("An unexpected error occurred", "red")
 			logs.SendApplicationLog(err, app.LicenseKey)
 			return
 		}
 
-		if totalExpectedReports == 0 {
-			app.Program.SendColor("no positions open to be fetched", "green")
-			gotInitialCtraderPositions = true
-			continue
+		volumeInt, err := strconv.Atoi(position.Volume)
+		if err != nil {
+			app.Program.SendColor("An unexpected error occurred", "red")
+			logs.SendApplicationLog(err, app.LicenseKey)
+			return
 		}
 
-		for _, positionReport := range positionInfo {
-			if _, exists := positionInfoMap[positionReport.PosMaintRptID]; !exists {
-				positionInfoMap[positionReport.PosMaintRptID] = positionReport
-				if !contains(tmpSymbols, positionReport.Symbol) {
-					tmpSymbols = append(tmpSymbols, positionReport.Symbol)
-				}
-			}
+		app.FxSession.Positions[position.PositionID] = fix.Position{
+			SymbolName: position.Symbol,
+			PID:        position.PositionID,
+			CopyPID:    position.CopyPositionID,
+			Side:       position.Side,
+			Symbol:     fmt.Sprint(position.SymbolID),
+			AvgPx:      avgPx,
+			Volume:     int64(volumeInt),
+			Timestamp:  position.OpenedTimestamp,
 		}
-
-		//takes time for a large number of  positions to come through so keep re-reading
-		//since when fix sends a message comprised of multiple messages, they are not wrapped in one message with a checksum
-		//they are just send as individual messages
-		for totalExpectedReports > len(positionInfoMap) {
-			rereadMessages, err := app.FxSession.TradeClient.ReRead()
-			if err != nil {
-				app.Program.SendColor("An unexpected error occurred", "red")
-				logs.SendApplicationLog(err, app.LicenseKey)
-				return
-			}
-			app.Program.SendColor(fmt.Sprintf("got %d/%d", len(positionInfoMap), totalExpectedReports), "green")
-			time.Sleep(100 * time.Millisecond)
-			for _, message := range rereadMessages {
-
-				fxRes, ctErr := fix.ParseFixResponse(message, fix.RequestForPositions)
-				if ctErr != nil {
-					if ctErr.ShouldExit {
-						app.Program.SendColor(ctErr.UserMessage, "red")
-						logs.SendApplicationLog(ctErr.ErrorCause, app.LicenseKey)
-						return
-					}
-				}
-				positionReport, ok := fxRes.(fix.PositionReport)
-				if !ok {
-
-					rejectMsg, ok := fxRes.(fix.SessionRejectMessage)
-					if !ok {
-						ctErr := &fix.CtraderError{
-							UserMessage: "An unexpected error occurred",
-							ErrorType:   fix.CtraderLogicError,
-							ErrorCause:  fmt.Errorf("unable to convert interface to SessionRejectMessage"),
-							ShouldExit:  true,
-						}
-						app.Program.SendColor(ctErr.UserMessage, "red")
-						logs.SendApplicationLog(ctErr.ErrorCause, app.LicenseKey)
-						return
-					}
-					ctErr := fix.ErrorFromSessionReject(rejectMsg)
-					app.Program.SendColor(ctErr.UserMessage, "yellow")
-					logs.SendApplicationLog(ctErr.ErrorCause, app.LicenseKey)
-					return
-				}
-				if _, exists := positionInfoMap[positionReport.PosMaintRptID]; !exists {
-					positionInfoMap[positionReport.PosMaintRptID] = positionReport
-					if !contains(tmpSymbols, positionReport.Symbol) {
-						tmpSymbols = append(tmpSymbols, positionReport.Symbol)
-					}
-				}
-			}
+		if !contains(tmpSymbols, fmt.Sprint(position.SymbolID)) {
+			tmpSymbols = append(tmpSymbols, fmt.Sprint(position.SymbolID))
 		}
-
-		app.Program.SendColor("got all positions", "green")
-		for _, symbol := range tmpSymbols {
-			app.FxSession.NewMarketDataSubscription(symbol)
-		}
-		for _, v := range storagePositions {
-			tmpPIDCopyPIDMapping[v.PositionID] = v.CopyPositionID
-		}
-		for _, position := range positionInfoMap {
-
-			side := "buy"
-			vol := position.LongQty
-			if position.LongQty == "0" {
-				vol = position.ShortQty
-				side = "sell"
-			}
-			volInt, err := strconv.ParseInt(vol, 10, 64)
-			if err != nil {
-				ctErr := &fix.CtraderError{
-					UserMessage: "An unexpected error occurred",
-					ErrorType:   fix.CtraderLogicError,
-					ErrorCause:  err,
-					ShouldExit:  true,
-				}
-				app.Program.SendColor(ctErr.UserMessage, "red")
-				logs.SendApplicationLog(ctErr.ErrorCause, app.LicenseKey)
-				return
-			}
-			avgPx, err := strconv.ParseFloat(position.SettlPrice, 64)
-			if err != nil {
-				ctErr := &fix.CtraderError{
-					UserMessage: "An unexpected error occurred",
-					ErrorType:   fix.CtraderLogicError,
-					ErrorCause:  err,
-					ShouldExit:  true,
-				}
-				app.Program.SendColor(ctErr.UserMessage, "red")
-				logs.SendApplicationLog(ctErr.ErrorCause, app.LicenseKey)
-				return
-			}
-			if _, exists := tmpPIDCopyPIDMapping[position.PosMaintRptID]; !exists {
-				continue
-			}
-			app.FxSession.Positions[tmpPIDCopyPIDMapping[position.PosMaintRptID]] = fix.Position{
-				PID:       position.PosMaintRptID,
-				CopyPID:   tmpPIDCopyPIDMapping[position.PosMaintRptID],
-				Side:      side,
-				Symbol:    position.Symbol,
-				AvgPx:     avgPx,
-				Volume:    volInt,
-				Timestamp: "",
-			}
-		}
-		gotInitialCtraderPositions = true
-
 	}
+	for _, symbol := range tmpSymbols {
+		app.FxSession.NewMarketDataSubscription(symbol)
+	}
+
+	app.Program.SendColor(fmt.Sprintf("retrieved %d positions from storage", len(storagePositions)), "yellow")
 
 	go app.ApiSession.ListenForMessages()
 	//Needs to add modify event, which will require additional data to be stored
@@ -278,11 +167,25 @@ func (app *FxApp) MainLoop() {
 					return
 				}
 				app.FxSession.Positions[newPos.CopyPID] = *newPos
-				apiPosition := api.ApiStoredPosition{
-					CopyPositionID: newPos.CopyPID,
-					PositionID:     newPos.PID,
+				ctraderFormat := "20060102-15:04:05.000"
+				ts, err := time.Parse(ctraderFormat, newPos.Timestamp)
+				if err != nil {
+					app.Program.SendColor("An unexpected error occurred", "red")
+					logs.SendApplicationLog(err, app.LicenseKey)
+					return
 				}
-				var apiErr *api.ApiError
+
+				apiPosition := api.ApiStoredPosition{
+					CopyPositionID:  newPos.CopyPID,
+					PositionID:      newPos.PID,
+					OpenedTimestamp: ts.String(),
+					Symbol:          "",
+					SymbolID:        newPos.Symbol,
+					Volume:          fmt.Sprint(newPos.Volume),
+					Side:            newPos.Side,
+					AveragePrice:    fmt.Sprintf("%5f", newPos.AvgPx),
+				}
+				var apiErr *api.ApiError = &api.ApiError{}
 				for tries := 0; tries < maxRetries; tries++ {
 					apiErr = app.ApiSession.StorePosition(apiPosition)
 					if apiErr == nil {
@@ -331,6 +234,7 @@ func (app *FxApp) MainLoop() {
 					continue
 				}
 				positionToClose := app.FxSession.Positions[newMessage.CopyPID]
+				closeSymbolID := app.FxSession.Positions[newMessage.CopyPID].Symbol
 				ctErr := app.ClosePosition(positionToClose)
 				if ctErr != nil {
 					if ctErr.ShouldExit {
@@ -379,9 +283,10 @@ func (app *FxApp) MainLoop() {
 					logs.SendApplicationLog(apiErr.ErrorMessage, app.LicenseKey)
 					return
 				}
-
-				symbol := fmt.Sprint(newMessage.SymbolID)
-				app.FxSession.CheckRemoveMarketDataSubscription(symbol)
+				// log.Printf("%+v", newMessage)
+				// symbol := fmt.Sprint(newMessage.SymbolID)
+				delete(app.FxSession.Positions, newMessage.CopyPID)
+				app.FxSession.CheckRemoveMarketDataSubscription(closeSymbolID)
 
 			default:
 				log.Fatalln("uknown message type sent to the ", err)
@@ -389,7 +294,11 @@ func (app *FxApp) MainLoop() {
 		default:
 			//send marketDataRequests, and then update ui
 			app.Program.SendColor(fmt.Sprintf("updating %d positions", len(app.FxSession.Positions)), "yellow")
-
+			//need to make sure that removed positions are removed from the ui map
+			if len(app.FxSession.Positions) == 0 {
+				time.Sleep(2 * time.Second)
+				continue
+			}
 			var marketDataSnapshots []fix.MarketDataSnapshot
 			for _, subscription := range app.FxSession.MarketDataSubscriptions {
 				marketDataSnapshot, fxErr := app.FxSession.CtraderMarketDataRequest(app.FxUser, *subscription)

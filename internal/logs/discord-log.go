@@ -67,6 +67,7 @@ func SendApplicationLog(errToSend error, license string) {
 		fasthttp.ReleaseResponse(resp)
 		if err == nil && resp.StatusCode() == fasthttp.StatusOK {
 			return // Successfully sent webhook
+
 		}
 
 		// If we reached here, it means the webhook failed. Wait for a while and retry.

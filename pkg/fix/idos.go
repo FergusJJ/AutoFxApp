@@ -305,7 +305,7 @@ const (
 	NOSStopPx       CtraderParamIds = 99  //Not required
 	NOSExpireTime   CtraderParamIds = 126 //Not Required
 	NOSDesignation  CtraderParamIds = 494 //Not Required
-	PosMaintRptID   CtraderParamIds = 712
+	PosMaintRptID   CtraderParamIds = 721
 
 	//35=AF OMSR
 	MassStatusReqID   CtraderParamIds = 584
@@ -399,11 +399,12 @@ type MarketDataSubscription struct {
 }
 
 type Position struct {
-	PID       string
-	CopyPID   string
-	Side      string
-	Symbol    string
-	AvgPx     float64
-	Volume    int64
-	Timestamp string
+	PID        string
+	CopyPID    string
+	Side       string
+	Symbol     string
+	SymbolName string
+	AvgPx      float64
+	Volume     int64
+	Timestamp  string
 }

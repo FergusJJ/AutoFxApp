@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+
 	"pollo/config"
 
 	"github.com/valyala/fasthttp"
@@ -57,6 +58,7 @@ func (s *ApiSession) FetchPositions() ([]ApiStoredPosition, *ApiError) {
 		}
 		return []ApiStoredPosition{}, apiErr
 	case fasthttp.StatusOK:
+
 		err := json.Unmarshal([]byte(resp.Body()), &positions)
 		if err != nil {
 			apiErr := &ApiError{

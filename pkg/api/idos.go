@@ -1,6 +1,8 @@
 package api
 
-import "github.com/fasthttp/websocket"
+import (
+	"github.com/fasthttp/websocket"
+)
 
 type ApiSession struct {
 	Client       ApiClient
@@ -27,8 +29,14 @@ type ApiMonitorMessage struct {
 }
 
 type ApiStoredPosition struct {
-	CopyPositionID string `json:"copyPositionID"`
-	PositionID     string `json:"positionID"`
+	CopyPositionID  string `json:"copyPositionID"`
+	PositionID      string `json:"positionID"`
+	OpenedTimestamp string `json:"openedTimestamp"`
+	Symbol          string `json:"symbol"`
+	SymbolID        string `json:"symbolID"`
+	Volume          string `json:"volume"`
+	Side            string `json:"Side"`
+	AveragePrice    string `json:"averagePrice"`
 }
 
 type apiErrorResponse struct {
