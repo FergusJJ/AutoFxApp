@@ -176,6 +176,9 @@ func (session *FxSession) CtraderNewOrderSingle(user FxUser, orderData OrderData
 	if len(executionReports) > 1 {
 		//maybe just log something to client for now? Is unlikely that will happen with market order I think.
 		//or could add to some sort of messageQueue?
+		for _, v := range executionReports {
+			log.Printf("%+v\n", v)
+		}
 		log.Fatal("unexpected response length")
 	}
 	return &executionReports[0], nil

@@ -218,7 +218,7 @@ func (app *FxApp) MainLoop() {
 					}
 				}
 				if apiErr != nil {
-					apiErr.ErrorMessage = fmt.Errorf("failed after 3 retries: %v", fxErr.ErrorCause)
+					apiErr.ErrorMessage = fmt.Errorf("failed after 3 retries: %v", apiErr.ErrorMessage)
 					logs.SendApplicationLog(apiErr.ErrorMessage, app.LicenseKey)
 					return
 				}
@@ -307,11 +307,11 @@ func (app *FxApp) MainLoop() {
 						continue
 					}
 					if fxErr.ShouldExit {
-						app.Program.SendColor(apiErr.UserMessage, "red")
-						logs.SendApplicationLog(apiErr.ErrorMessage, app.LicenseKey)
+						app.Program.SendColor(fxErr.UserMessage, "red")
+						logs.SendApplicationLog(fxErr.ErrorCause, app.LicenseKey)
 						return
 					}
-					app.Program.SendColor(apiErr.UserMessage, "yellow")
+					app.Program.SendColor(fxErr.UserMessage, "yellow")
 
 				}
 				marketDataSnapshots = append(marketDataSnapshots, marketDataSnapshot...)
