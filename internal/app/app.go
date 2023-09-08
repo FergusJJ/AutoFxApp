@@ -59,32 +59,7 @@ func (app *FxApp) MainLoop() {
 		logs.SendApplicationLog(fxErr.ErrorCause, app.LicenseKey)
 		return
 	}
-	// log.Print("loggedin")
 	app.Program.SendColor("Logged in to ctrader", "green")
-
-	// copyPos := &api.ApiMonitorMessage{
-	// 	CopyPID:         "123",
-	// 	SymbolID:        1,
-	// 	Symbol:          "TEST",
-	// 	Price:           69,
-	// 	Volume:          1000,
-	// 	Direction:       "BUY",
-	// 	MessageType:     "OPEN",
-	// 	OpenedTimestamp: 0,
-	// }
-	// _, _ = app.OpenPosition(copyPos)
-	// pos := fix.Position{
-	// 	ClOrdID:    uuid.New().String(),
-	// 	PID:        "56840535",
-	// 	CopyPID:    "123",
-	// 	Side:       "buy",
-	// 	SymbolName: "EURUSD",
-	// 	Symbol:     "1",
-	// 	AvgPx:      69,
-	// 	Volume:     1000,
-	// 	Timestamp:  "0",
-	// }
-	// _ = app.ClosePosition(pos)
 
 	var apiErr *api.ApiError
 	var storagePositions = []api.ApiStoredPosition{}
