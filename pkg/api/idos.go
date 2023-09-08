@@ -20,12 +20,14 @@ type ApiClient struct {
 }
 
 type ApiMonitorMessage struct {
-	CopyPID     string  `json:"copyPID"`
-	SymbolID    int     `json:"symbolID"`
-	Price       float64 `json:"price"`
-	Volume      int     `json:"volume"`
-	Direction   string  `json:"direction"`
-	MessageType string  `json:"type"` //close or open
+	CopyPID         string  `json:"copyPID"`
+	SymbolID        int     `json:"symbolID"`
+	Symbol          string  `json:"symbol"`
+	Price           float64 `json:"price"`
+	Volume          int     `json:"volume"`
+	Direction       string  `json:"direction"`
+	MessageType     string  `json:"type"` //close or open
+	OpenedTimestamp int     `json:"openedTimestamp"`
 }
 
 type ApiStoredPosition struct {

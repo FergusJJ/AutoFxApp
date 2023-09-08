@@ -92,9 +92,9 @@ func (m Model) View() string {
 	rows := []table.Row{}
 	for _, v := range m.positions {
 		if v.isProfit {
-			rows = append(rows, []string{v.positionId, v.copyPositionId, v.timestamp, v.symbol, v.volume, v.side, v.entryPrice, v.currentPrice, v.grossProfit})
+			rows = append(rows, []string{v.positionId, v.copyPositionId, v.timestamp, v.symbolName, v.volume, v.side, v.entryPrice, v.currentPrice, v.grossProfit})
 		} else {
-			rows = append(rows, []string{v.positionId, v.copyPositionId, v.timestamp, v.symbol, v.volume, v.side, v.entryPrice, v.currentPrice, v.grossProfit})
+			rows = append(rows, []string{v.positionId, v.copyPositionId, v.timestamp, v.symbolName, v.volume, v.side, v.entryPrice, v.currentPrice, v.grossProfit})
 		}
 
 	}

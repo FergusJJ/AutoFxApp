@@ -53,6 +53,7 @@ func start() (func(), error) {
 		//need some sort of pause here on the ui, block until the user exits
 		app.Program.Program.Send(tea.QuitMsg{})
 	}()
+
 	errChan <- func() error {
 		_, err := app.Program.Program.Run()
 		if err != nil {
@@ -173,7 +174,6 @@ func initialiseProgram() (*app.FxApp, func(), error) {
 	App.ApiSession.Client.Connection = apiConn
 	App.ApiSession.Client.CurrentMessage = make(chan []byte)
 	log.Println("connected to internal api")
-
 	//ApiSesion Done
 
 	//start the actual program, initilse monitoring client via ws,

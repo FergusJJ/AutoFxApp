@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"time"
 )
 
 func (session *FxSession) CtraderLogin(user FxUser, channel CtraderMessageChannel) *CtraderError {
@@ -132,6 +133,7 @@ func (session *FxSession) CtraderNewOrderSingle(user FxUser, orderData OrderData
 			ShouldExit:  true,
 		}
 	}
+	log.Print(orderMessage)
 	fxResponseMap, err := session.TradeClient.RoundTrip(orderMessage)
 	if err != nil {
 		return nil, &CtraderError{
@@ -141,12 +143,14 @@ func (session *FxSession) CtraderNewOrderSingle(user FxUser, orderData OrderData
 			ShouldExit:  false,
 		}
 	}
+	if len(fxResponseMap) != 1 {
+		log.Fatalf("unexpected number of execution reports %d", len(fxResponseMap))
+	}
 	session.TradeMessageSequenceNumber++
-	executionReports := []ExecutionReport{}
-	for _, v := range fxResponseMap {
-		fxRes, err := ParseFixResponse(v, NewOrderSingle)
-		if err != nil {
-			return nil, err
+	for i := 0; i < 3; i++ {
+		fxRes, ctErr := ParseFixResponse(fxResponseMap[0], NewOrderSingle)
+		if ctErr != nil {
+			return nil, ctErr
 		}
 		executionReport, ok := fxRes.(ExecutionReport)
 		if !ok {
@@ -171,17 +175,23 @@ func (session *FxSession) CtraderNewOrderSingle(user FxUser, orderData OrderData
 				ShouldExit:  true,
 			}
 		}
-		executionReports = append(executionReports, executionReport)
-	}
-	if len(executionReports) > 1 {
-		//maybe just log something to client for now? Is unlikely that will happen with market order I think.
-		//or could add to some sort of messageQueue?
-		for _, v := range executionReports {
-			log.Printf("%+v\n", v)
+		if executionReport.ClOrdID == orderData.ClOrdID {
+			return &executionReport, nil
 		}
-		log.Fatal("unexpected response length")
+		time.Sleep(1 * time.Second)
+		fxResponseMap, err = session.TradeClient.ReRead()
+		if err != nil {
+			return nil, &CtraderError{
+				UserMessage: "An error occurred sending an order",
+				ErrorType:   CtraderConnectionError,
+				ErrorCause:  err,
+				ShouldExit:  false,
+			}
+		}
+
 	}
-	return &executionReports[0], nil
+	log.Fatal("couldn't get correct position")
+	return nil, nil
 }
 
 // // Needs clordID
@@ -322,6 +332,7 @@ func (session *FxSession) CtraderMarketDataRequest(user FxUser, subscription Mar
 			ShouldExit:  false,
 		}
 	}
+	// if len(fxResponseMap) !=
 	session.PriceMessageSequenceNumber++
 	var data = make([]MarketDataSnapshot, 0)
 	for _, message := range fxResponseMap {

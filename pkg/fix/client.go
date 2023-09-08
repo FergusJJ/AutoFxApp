@@ -22,6 +22,7 @@ type FixClient struct {
 	readBufferSize int
 	conn           net.Conn
 	reader         *bufio.Reader
+	LastMessage    *FixResponse
 }
 
 type FixResponse struct {

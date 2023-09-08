@@ -34,6 +34,7 @@ type MessageBodyAndTag struct {
 }
 
 type OrderData struct {
+	ClOrdID       string  `json:"clOrdID"`
 	PosMaintRptID string  `json:"posMaintRptID"`
 	Symbol        string  `json:"symbol"`
 	Volume        float64 `json:"volume"`
@@ -399,11 +400,12 @@ type MarketDataSubscription struct {
 }
 
 type Position struct {
+	ClOrdID    string
 	PID        string
 	CopyPID    string
 	Side       string
-	Symbol     string
 	SymbolName string
+	Symbol     string
 	AvgPx      float64
 	Volume     int64
 	Timestamp  string

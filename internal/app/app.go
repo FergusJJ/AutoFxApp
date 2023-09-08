@@ -59,8 +59,32 @@ func (app *FxApp) MainLoop() {
 		logs.SendApplicationLog(fxErr.ErrorCause, app.LicenseKey)
 		return
 	}
-
+	// log.Print("loggedin")
 	app.Program.SendColor("Logged in to ctrader", "green")
+
+	// copyPos := &api.ApiMonitorMessage{
+	// 	CopyPID:         "123",
+	// 	SymbolID:        1,
+	// 	Symbol:          "TEST",
+	// 	Price:           69,
+	// 	Volume:          1000,
+	// 	Direction:       "BUY",
+	// 	MessageType:     "OPEN",
+	// 	OpenedTimestamp: 0,
+	// }
+	// _, _ = app.OpenPosition(copyPos)
+	// pos := fix.Position{
+	// 	ClOrdID:    uuid.New().String(),
+	// 	PID:        "56840535",
+	// 	CopyPID:    "123",
+	// 	Side:       "buy",
+	// 	SymbolName: "EURUSD",
+	// 	Symbol:     "1",
+	// 	AvgPx:      69,
+	// 	Volume:     1000,
+	// 	Timestamp:  "0",
+	// }
+	// _ = app.ClosePosition(pos)
 
 	var apiErr *api.ApiError
 	var storagePositions = []api.ApiStoredPosition{}
@@ -122,15 +146,14 @@ func (app *FxApp) MainLoop() {
 			return
 		}
 
-		app.FxSession.Positions[position.PositionID] = fix.Position{
-			SymbolName: position.Symbol,
-			PID:        position.PositionID,
-			CopyPID:    position.CopyPositionID,
-			Side:       position.Side,
-			Symbol:     fmt.Sprint(position.SymbolID),
-			AvgPx:      avgPx,
-			Volume:     int64(volumeInt),
-			Timestamp:  position.OpenedTimestamp,
+		app.FxSession.Positions[position.CopyPositionID] = fix.Position{
+			PID:       position.PositionID,
+			CopyPID:   position.CopyPositionID,
+			Side:      position.Side,
+			Symbol:    fmt.Sprint(position.SymbolID),
+			AvgPx:     avgPx,
+			Volume:    int64(volumeInt),
+			Timestamp: position.OpenedTimestamp,
 		}
 		if !contains(tmpSymbols, fmt.Sprint(position.SymbolID)) {
 			tmpSymbols = append(tmpSymbols, fmt.Sprint(position.SymbolID))
@@ -147,15 +170,20 @@ func (app *FxApp) MainLoop() {
 	for {
 		select {
 		case currentMessage := <-app.ApiSession.Client.CurrentMessage:
+			app.Program.SendColor("incoming message", "yellow")
+
 			newMessage := &api.ApiMonitorMessage{}
 			err := json.Unmarshal(currentMessage, newMessage)
 			if err != nil {
 				log.Fatalf("%+v", err)
 			}
+
 			switch newMessage.MessageType {
 			case "OPEN":
-				app.Program.SendColor(fmt.Sprintf("%+v", newMessage), "green")
-				//any non-fatal errors should be handled within the function, all errors at this point should quit
+				thirtySecondsMillis := 30000
+				if (int(time.Now().UnixMilli()) - newMessage.OpenedTimestamp) > thirtySecondsMillis {
+					break
+				}
 				newPos, ctErr := app.OpenPosition(newMessage)
 				if ctErr != nil {
 					if ctErr.ShouldExit {
@@ -166,7 +194,9 @@ func (app *FxApp) MainLoop() {
 					logs.SendApplicationLog(fmt.Errorf("app.OpenPosition returned not-fatal error: %w", ctErr.ErrorCause), app.LicenseKey)
 					return
 				}
+				newPos.SymbolName = newMessage.Symbol
 				app.FxSession.Positions[newPos.CopyPID] = *newPos
+
 				ctraderFormat := "20060102-15:04:05.000"
 				ts, err := time.Parse(ctraderFormat, newPos.Timestamp)
 				if err != nil {
@@ -174,12 +204,11 @@ func (app *FxApp) MainLoop() {
 					logs.SendApplicationLog(err, app.LicenseKey)
 					return
 				}
-
 				apiPosition := api.ApiStoredPosition{
 					CopyPositionID:  newPos.CopyPID,
 					PositionID:      newPos.PID,
 					OpenedTimestamp: ts.String(),
-					Symbol:          "",
+					Symbol:          newMessage.Symbol,
 					SymbolID:        newPos.Symbol,
 					Volume:          fmt.Sprint(newPos.Volume),
 					Side:            newPos.Side,
@@ -226,11 +255,9 @@ func (app *FxApp) MainLoop() {
 				app.Program.SendColor("creating new marketData subscription", "yellow")
 				app.FxSession.NewMarketDataSubscription(symbol)
 			case "CLOSE":
-				app.Program.SendColor(fmt.Sprintf("closing position %s", newMessage.CopyPID), "green")
-				// newMessage.CopyPID
+
 				_, exists := app.FxSession.Positions[newMessage.CopyPID]
 				if !exists {
-					app.Program.SendColor("user doesn't have position", "green")
 					continue
 				}
 				positionToClose := app.FxSession.Positions[newMessage.CopyPID]
@@ -286,6 +313,7 @@ func (app *FxApp) MainLoop() {
 				// log.Printf("%+v", newMessage)
 				// symbol := fmt.Sprint(newMessage.SymbolID)
 				delete(app.FxSession.Positions, newMessage.CopyPID)
+				delete(app.UiPositionsDataMap, newMessage.CopyPID)
 				app.FxSession.CheckRemoveMarketDataSubscription(closeSymbolID)
 
 			default:
@@ -293,16 +321,18 @@ func (app *FxApp) MainLoop() {
 			}
 		default:
 			//send marketDataRequests, and then update ui
-			app.Program.SendColor(fmt.Sprintf("updating %d positions", len(app.FxSession.Positions)), "yellow")
+			// app.Program.SendColor(fmt.Sprintf("updating %d positions", len(app.FxSession.Positions)), "yellow")
 			//need to make sure that removed positions are removed from the ui map
 			if len(app.FxSession.Positions) == 0 {
 				time.Sleep(2 * time.Second)
+				app.Program.Program.Send(PositionMessageSlice(app.UiPositionsDataMap))
 				continue
 			}
 			var marketDataSnapshots []fix.MarketDataSnapshot
 			for _, subscription := range app.FxSession.MarketDataSubscriptions {
 				marketDataSnapshot, fxErr := app.FxSession.CtraderMarketDataRequest(app.FxUser, *subscription)
 				if fxErr != nil {
+					//need to sort this out
 					if strings.Contains(fxErr.ErrorCause.Error(), "ALREADY_SUBSCRIBED") {
 						continue
 					}
@@ -315,6 +345,7 @@ func (app *FxApp) MainLoop() {
 
 				}
 				marketDataSnapshots = append(marketDataSnapshots, marketDataSnapshot...)
+
 			}
 
 			var symbolPricePairs = map[string]float64{}
@@ -344,6 +375,7 @@ func (app *FxApp) MainLoop() {
 				currentPriceStr := roundFloat(symbolPricePairs[v.Symbol])
 
 				newUiPosition := uiPositionData{
+					symbolName:     v.SymbolName,
 					entryPrice:     entryStr,
 					currentPrice:   currentPriceStr,
 					copyPositionId: v.CopyPID,
@@ -355,11 +387,14 @@ func (app *FxApp) MainLoop() {
 					symbol:         v.Symbol,
 					isProfit:       grossProfit > 0,
 				}
+				if currentPriceStr == "0" {
+					continue
+				}
 				app.UiPositionsDataMap[newUiPosition.copyPositionId] = newUiPosition
 			}
 			app.Program.Program.Send(PositionMessageSlice(app.UiPositionsDataMap))
 
-			time.Sleep(2 * time.Second)
+			time.Sleep(500 * time.Millisecond)
 			continue
 		}
 	}

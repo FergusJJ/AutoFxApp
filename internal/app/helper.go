@@ -9,9 +9,9 @@ import (
 func calculateProfits(boughtAt, currentPrice, volume float64, side string) (netProfit float64) {
 	//need comission & swap to calculate gross profit.Going to have to store more in database for position, or could just store orderID and get the execution report?
 	switch side {
-	case "buy":
+	case "BUY":
 		netProfit = (currentPrice - boughtAt) * volume
-	case "sell":
+	case "SELL":
 		netProfit = (boughtAt - currentPrice) * volume
 	}
 

@@ -22,6 +22,7 @@ type AppProgram struct {
 }
 
 type uiPositionData struct {
+	symbolName     string
 	entryPrice     string
 	currentPrice   string
 	copyPositionId string

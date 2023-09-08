@@ -59,7 +59,7 @@ func (user *FxUser) constructNewOrderSingle(session *FxSession, orderData OrderD
 
 	volAsString := fmt.Sprintf("%g", orderData.Volume)
 	transactTime := time.Now().UTC().Format(YYYYMMDDhhmmss)
-	newOrderSingleParams = append(newOrderSingleParams, formatMessageSlice(ClOrdID, uuid.New().String(), true))
+	newOrderSingleParams = append(newOrderSingleParams, formatMessageSlice(ClOrdID, orderData.ClOrdID, true))
 	newOrderSingleParams = append(newOrderSingleParams, formatMessageSlice(NOSSymbol, orderData.Symbol, true))
 	newOrderSingleParams = append(newOrderSingleParams, formatMessageSlice(Side, orderData.Direction, false))
 	newOrderSingleParams = append(newOrderSingleParams, formatMessageSlice(NOSTransactTime, transactTime, true))
@@ -74,6 +74,7 @@ func (user *FxUser) constructNewOrderSingle(session *FxSession, orderData OrderD
 	headerWithBody := fmt.Sprintf("%s%s", header, newOrderSingleBody)
 	trailer := constructTrailer(headerWithBody)
 	message := strings.ReplaceAll(fmt.Sprintf("%s%s", headerWithBody, trailer), "|", "\u0001")
+
 	return message, nil
 }
 

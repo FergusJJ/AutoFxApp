@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 var orderRetryDelay time.Duration = 3 * time.Second
@@ -21,6 +23,7 @@ func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (*fix.Positi
 		Volume:        float64(copyPosition.Volume),
 		Direction:     strings.ToLower(copyPosition.Direction),
 		OrderType:     "market",
+		ClOrdID:       uuid.New().String(),
 	}
 	maxRetries := 3
 	var executionReport *fix.ExecutionReport
@@ -49,7 +52,6 @@ func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (*fix.Positi
 		case "0":
 			app.Program.SendColor("order in progress...", "yellow")
 			time.Sleep(pollTimeout)
-
 		case "4":
 			app.Program.SendColor("order was cancelled", "red")
 			return nil, nil
@@ -70,6 +72,7 @@ func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (*fix.Positi
 				return &fix.Position{
 						PID:     executionReport.PosMaintRptID,
 						CopyPID: copyPosition.CopyPID,
+						ClOrdID: orderData.ClOrdID,
 					}, &fix.CtraderError{
 						UserMessage: fmt.Sprintf("An unexpected error occurred parsing your position: %s", executionReport.PosMaintRptID),
 						ErrorCause:  err,
@@ -82,6 +85,7 @@ func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (*fix.Positi
 				return &fix.Position{
 						PID:     executionReport.PosMaintRptID,
 						CopyPID: copyPosition.CopyPID,
+						ClOrdID: orderData.ClOrdID,
 					}, &fix.CtraderError{
 						UserMessage: fmt.Sprintf("An unexpected error occurred parsing your position: %s", executionReport.PosMaintRptID),
 						ErrorCause:  err,
@@ -90,6 +94,7 @@ func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (*fix.Positi
 					}
 			}
 			positionData := &fix.Position{
+				ClOrdID:   orderData.ClOrdID,
 				PID:       executionReport.PosMaintRptID,
 				CopyPID:   copyPosition.CopyPID,
 				Side:      copyPosition.Direction,
@@ -108,7 +113,7 @@ func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (*fix.Positi
 		case "I":
 			log.Fatalf("in OpenPosition ExecType: %+v", executionReport)
 		}
-		clOrdID := executionReport.ClOrdID
+		clOrdID := orderData.ClOrdID
 
 		for tries := 0; tries < maxRetries; tries++ {
 			executionReport, ctErr = app.FxSession.CtraderOrderStatus(app.FxUser, clOrdID)
@@ -132,7 +137,7 @@ func (app *FxApp) OpenPosition(copyPosition *api.ApiMonitorMessage) (*fix.Positi
 func (app *FxApp) ClosePosition(closePosition fix.Position) *fix.CtraderError {
 	direction := "buy"
 	//on netted accounts, closing an order means opening the same order in the opposite direction
-	if closePosition.Side == "buy" {
+	if strings.ToLower(closePosition.Side) == "buy" {
 		direction = "sell"
 	}
 	orderData := fix.OrderData{
@@ -140,7 +145,8 @@ func (app *FxApp) ClosePosition(closePosition fix.Position) *fix.CtraderError {
 		Symbol:        fmt.Sprint(closePosition.Symbol),
 		Volume:        float64(closePosition.Volume),
 		Direction:     direction,
-		OrderType:     "market", //will prob always be market for close position
+		OrderType:     "market",            //will prob always be market for close position
+		ClOrdID:       uuid.New().String(), //closePosition.ClOrdID,
 	}
 
 	maxRetries := 3
