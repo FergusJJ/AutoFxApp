@@ -122,13 +122,14 @@ func (app *FxApp) MainLoop() {
 		}
 
 		app.FxSession.Positions[position.CopyPositionID] = fix.Position{
-			PID:       position.PositionID,
-			CopyPID:   position.CopyPositionID,
-			Side:      position.Side,
-			Symbol:    fmt.Sprint(position.SymbolID),
-			AvgPx:     avgPx,
-			Volume:    int64(volumeInt),
-			Timestamp: position.OpenedTimestamp,
+			PID:        position.PositionID,
+			CopyPID:    position.CopyPositionID,
+			Side:       position.Side,
+			Symbol:     fmt.Sprint(position.SymbolID),
+			SymbolName: position.Symbol,
+			AvgPx:      avgPx,
+			Volume:     int64(volumeInt),
+			Timestamp:  position.OpenedTimestamp,
 		}
 		if !contains(tmpSymbols, fmt.Sprint(position.SymbolID)) {
 			tmpSymbols = append(tmpSymbols, fmt.Sprint(position.SymbolID))
@@ -368,7 +369,6 @@ func (app *FxApp) MainLoop() {
 				app.UiPositionsDataMap[newUiPosition.copyPositionId] = newUiPosition
 			}
 			app.Program.Program.Send(PositionMessageSlice(app.UiPositionsDataMap))
-
 			time.Sleep(500 * time.Millisecond)
 			continue
 		}
