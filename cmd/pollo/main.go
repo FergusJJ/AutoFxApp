@@ -88,7 +88,7 @@ func initialiseProgram() (*app.FxApp, func(), error) {
 	}
 	App.FxUser = *fxUser
 
-	licenseKey, pools, err := config.LoadSettingsFromJson()
+	licenseKey /*pools,*/, err := config.LoadSettingsFromJson()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -97,7 +97,7 @@ func initialiseProgram() (*app.FxApp, func(), error) {
 		return nil, nil, err
 	}
 	App.LicenseKey = licenseKey
-	App.ApiSession.Pools = pools
+	App.ApiSession.Pools = "" //pools
 	//FxUser & Lisence Key Done
 
 	//FxSession Start
@@ -164,7 +164,7 @@ func initialiseProgram() (*app.FxApp, func(), error) {
 
 	log.Println("session authorised")
 
-	apiConn, err := api.CreateApiConnection(App.ApiSession.Cid, pools)
+	apiConn, err := api.CreateApiConnection(App.ApiSession.Cid, "") //pools)
 	if err != nil {
 		return nil, func() {
 			App.CloseExistingConnections()
