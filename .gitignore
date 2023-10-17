@@ -1,5 +1,6 @@
 user/test.json
 user/settings.json
+user/data.json
 *.exe
 
 .env

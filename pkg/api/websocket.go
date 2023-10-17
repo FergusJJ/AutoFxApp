@@ -94,12 +94,12 @@ func (session *ApiSession) ListenForMessages() {
 				return
 			default:
 				// Other errors occurred that can be recovered
-				log.Printf("WebSocket error occurred: %v\n", err)
+				//log.Printf("WebSocket error occurred: %v\n", err)
 				// If the error can be recovered, you may want to attempt to recover and continue the loop
 				if errType, ok := err.(*websocket.CloseError); ok {
 					log.Printf("WebSocket error type: %s\n", fmt.Sprintf("%d", errType.Code))
 				} else {
-					log.Printf("WebSocket error type: unknown\n")
+                    log.Printf("connection closed\n")
 				}
 				return
 				// If the error can be recovered, you may want to attempt to recover and continue the loop
