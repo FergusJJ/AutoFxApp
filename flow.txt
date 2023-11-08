@@ -1,1 +1,0 @@
-//want to do a hardcoded request to open and close a position on app startup to check whether there is anything wrong with the message formatting
