@@ -10,5 +10,5 @@ This program will try to execute them.
 
 ## Notes
 - Note 1: Table element was meant to be switched to [this](https://github.com/Evertras/bubble-table) as I didn't add function to reformat the table on window size change.
-- Note 2: In order to accurately display price, the (Ctrader OpenAPI)[https://openapi.ctrader.com/] is needed.
+- Note 2: In order to accurately display price, the [Ctrader OpenAPI](https://openapi.ctrader.com/) is needed.
 
